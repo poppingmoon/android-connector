@@ -60,7 +60,7 @@ internal object InternalPushServiceConnection {
 
     /**
      * Bind to [PushService] with application context to store it in a static object,
-     * and unbind 1 second later
+     * and unbind 10 second later
      */
     private fun bind(context: Context) {
         Log.d(TAG, "Binding to PushService")
@@ -71,7 +71,7 @@ internal object InternalPushServiceConnection {
         }.also { intent ->
             context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
         }
-        Timer().schedule(1_000L) {
+        Timer().schedule(10_000L) {
             Log.d(TAG, "Unbinding")
             context.unbindService(connection)
         }
