@@ -6,7 +6,7 @@ import android.content.Intent
 import android.util.Log
 import org.unifiedpush.android.connector.data.PushEndpoint
 import org.unifiedpush.android.connector.data.PushMessage
-import org.unifiedpush.android.connector.internal.Store
+import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.WakeLock
 import org.unifiedpush.android.connector.keys.DefaultKeyManager
 import org.unifiedpush.android.connector.keys.KeyManager
@@ -101,11 +101,11 @@ abstract class MessagingReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         val token = intent.getStringExtra(EXTRA_TOKEN)
-        val store = Store(context)
+        val store = DBStore.get(context)
         val keyManager = getKeyManager(context)
         val instance =
             token?.let {
-                store.registrationSet.tryGetInstance(it)
+                store.registrations.getInstance(it)
             } ?: return
         val wakeLock = WakeLock(context)
         when (intent.action) {
@@ -113,23 +113,25 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                 val endpoint = intent.getStringExtra(EXTRA_ENDPOINT) ?: return
                 val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
                 val pubKeys = keyManager.getPublicKeySet(instance)
-                store.distributorAck = true
+                store.distributor.ack()
                 onNewEndpoint(context, PushEndpoint(endpoint, pubKeys), instance)
-                store.tryGetDistributor()?.let {
+                store.distributor.get()?.packageName?.let {
                     mayAcknowledgeMessage(context, it, id, token)
                 }
+                // TODO: handle Migration
             }
             ACTION_REGISTRATION_FAILED -> {
                 val reason = intent.getStringExtra(EXTRA_REASON).toFailedReason()
                 Log.i(TAG, "Failed: $reason")
-                store.registrationSet.removeInstance(instance, keyManager)
+                store.registrations.remove(instance, keyManager)
                 onRegistrationFailed(context, reason, instance)
             }
             ACTION_UNREGISTERED -> {
                 onUnregistered(context, instance)
-                store.registrationSet.removeInstance(instance, keyManager).ifEmpty {
-                    store.removeDistributor()
+                store.registrations.remove(instance, keyManager).ifEmpty {
+                    store.distributor.remove()
                 }
+                // TODO: handle Migration
             }
             ACTION_MESSAGE -> {
                 val message = intent.getByteArrayExtra(EXTRA_BYTES_MESSAGE) ?: return
@@ -144,7 +146,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                         PushMessage(message, false)
                     }
                 onMessage(context, pushMessage, instance)
-                store.tryGetDistributor()?.let {
+                store.distributor.get()?.packageName?.let {
                     mayAcknowledgeMessage(context, it, id, token)
                 }
             }

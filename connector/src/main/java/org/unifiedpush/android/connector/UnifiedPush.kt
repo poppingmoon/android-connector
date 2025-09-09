@@ -10,9 +10,9 @@ import android.content.pm.ResolveInfo
 import android.os.Build
 import android.util.AndroidException
 import android.util.Log
+import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
 import org.unifiedpush.android.connector.internal.Registration
-import org.unifiedpush.android.connector.internal.Store
 import org.unifiedpush.android.connector.keys.DefaultKeyManager
 import org.unifiedpush.android.connector.keys.KeyManager
 import kotlin.jvm.Throws
@@ -224,15 +224,17 @@ object UnifiedPush {
         vapid: String? = null,
         keyManager: KeyManager,
     ) {
-        val store = Store(context)
+        val store = DBStore.get(context)
+        val distributor = store.distributor.get() ?: return
         register(
             context,
-            store,
-            store.registrationSet.newOrUpdate(
+            distributor.packageName,
+            store.registrations.set(
                 instance,
                 messageForDistributor,
                 vapid?.replace("=", ""),
-                keyManager,
+                distributor,
+                keyManager
             ),
         )
     }
@@ -241,10 +243,9 @@ object UnifiedPush {
     @Throws(VapidNotValidException::class)
     private fun register(
         context: Context,
-        store: Store,
+        distributor: String,
         registration: Registration,
     ) {
-        val distributor = getDistributor(context, store, false) ?: return
         registration.vapid?.let {
             // This is mainly to catch VAPID used with the wrong format,
             // no need to check if this is a real vapid key
@@ -318,12 +319,12 @@ object UnifiedPush {
         instance: String = INSTANCE_DEFAULT,
         keyManager: KeyManager,
     ) {
-        val store = Store(context)
+        val store = DBStore.get(context)
         val distributor =
             getDistributor(context, store, false) ?: run {
-                // This should not be necessary
-                store.registrationSet.removeInstances(keyManager)
-                store.removeDistributor()
+                // TODO: FALLBACK to previous !
+                store.registrations.removeAll(keyManager)
+                store.distributor.remove()
                 return
             }
 
@@ -331,7 +332,8 @@ object UnifiedPush {
         val dummyIntent = Intent("org.unifiedpush.dummy_app")
         val pi = PendingIntent.getBroadcast(context, 0, dummyIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        val token = store.registrationSet.tryGetToken(instance) ?: return
+
+        val token = store.registrations.getToken(instance, distributor) ?: return
         val broadcastIntent =
             Intent().apply {
                 `package` = distributor
@@ -340,8 +342,8 @@ object UnifiedPush {
                 // For SDK < 34
                 putExtra(EXTRA_PI, pi)
             }
-        store.registrationSet.removeInstance(instance, keyManager).ifEmpty {
-            store.removeDistributor()
+        store.registrations.remove(instance, keyManager).ifEmpty {
+            store.distributor.remove()
         }
 
         if (Build.VERSION.SDK_INT >= 34) {
@@ -539,16 +541,12 @@ object UnifiedPush {
         context: Context,
         distributor: String,
     ) {
-        val store = Store(context)
-        // We use tryGetDistributor because we don't need
-        // to check if the distributor is still installed.
+        val store = DBStore.get(context)
+        // We don't need to check if the distributor is still installed.
         // There is no reason saveDistributor is called with an
         // uninstalled distributor, and if in any case it is,
         // get*Distributor checks if it is installed.
-        if (store.tryGetDistributor() != distributor) {
-            store.distributorAck = false
-            store.saveDistributor(distributor)
-        }
+        store.distributor.set(distributor)
     }
 
     /**
@@ -561,7 +559,7 @@ object UnifiedPush {
      * @return The distributor package name if any, else null
      */
     @JvmStatic
-    fun getSavedDistributor(context: Context): String? = getDistributor(context, Store(context), false)
+    fun getSavedDistributor(context: Context): String? = getDistributor(context, DBStore.get(context), false)
 
     /**
      * Get the distributor registered by the user, and the
@@ -573,48 +571,53 @@ object UnifiedPush {
      * @return The distributor package name if any, else null
      */
     @JvmStatic
-    fun getAckDistributor(context: Context): String? = getDistributor(context, Store(context), true)
+    fun getAckDistributor(context: Context): String? = getDistributor(context, DBStore.get(context), true)
 
     /**
      * Get the current distributor.
      *
-     * Send [ACTION_UNREGISTERED] for all instances if the distributor in [Store.tryGetDistributor]
+     * Send [ACTION_UNREGISTERED] for all instances if the distributor
      * is not installed anymore.
      *
      * @param [context] [Context] to interact with package manager.
-     * @param [store] [Store] to access our shared preferences.
+     * @param [store] [DBStore] to access our shared preferences.
      * @param [ack] `true` if the distributor has to be ack.
      */
     @JvmStatic
     private fun getDistributor(
         context: Context,
-        store: Store,
+        store: DBStore,
         ack: Boolean,
     ): String? {
-        if (ack && !store.distributorAck) {
+        val distributor = store.distributor.get() ?: return null
+        if (ack && !distributor.ack) {
             return null
         }
-        return store.tryGetDistributor()?.let { distributor ->
-            if (distributor in getDistributors(context)) {
-                Log.d(TAG, "Found saved distributor.")
-                distributor
-            } else {
-                Log.d(TAG, "There was a distributor, but it isn't installed anymore")
-                store.registrationSet.forEachInstance {
-                    broadcastLocalUnregistered(context, store, it)
+        return if (distributor.packageName in getDistributors(context)) {
+            Log.d(TAG, "Found saved distributor.")
+            distributor.packageName
+        } else {
+            Log.d(TAG, "There was a distributor, but it isn't installed anymore")
+            store.registrations.listInstances().forEach { instance ->
+                store.registrations.getToken(
+                    instance,
+                    distributor.packageName
+                )?.let { token ->
+                    broadcastLocalUnregistered(context, token)
                 }
-                null
             }
+            // TODO: handle migration
+            // distributor.disableLast
+            // return getDistributor(context, store, ack)
+            null
         }
     }
 
     @JvmStatic
     private fun broadcastLocalUnregistered(
         context: Context,
-        store: Store,
-        instance: String,
+        token: String
     ) {
-        val token = store.registrationSet.tryGetToken(instance) ?: return
         val broadcastIntent =
             Intent().apply {
                 `package` = context.packageName
@@ -674,12 +677,12 @@ object UnifiedPush {
         context: Context,
         keyManager: KeyManager,
     ) {
-        val store = Store(context)
-        store.registrationSet.forEachInstance {
-            unregister(context, it)
+        val store = DBStore.get(context)
+        store.registrations.listInstances().forEach {
+            unregister(context, it, keyManager)
         }
-        store.registrationSet.removeInstances(keyManager)
-        store.removeDistributor()
+        store.registrations.removeAll(keyManager)
+        store.distributor.remove()
     }
 
     /**
