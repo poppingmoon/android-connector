@@ -14,7 +14,7 @@ package org.unifiedpush.android.connector.internal
  * @param fallbackTo is null if the distributor is in use
  *
  */
-data class Distributor(
+internal data class Distributor(
     val packageName: String,
     val ack: Boolean,
     val fallbackFrom: String?,

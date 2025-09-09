@@ -51,6 +51,29 @@ internal class DBStore(context: Context) :
         db.setForeignKeyConstraintsEnabled(true)
     }
 
+    fun migrateFromLegacy(context: Context) {
+        val store = LegacyStore(context)
+        store.migrateDistributor {
+            distributor.set(it.packageName)
+            if (it.ack) distributor.ack()
+            return@migrateDistributor true
+        }
+        val distrib = distributor.get()
+        store.migrateRegistrations { reg ->
+            distrib?.let {
+                registrations.set(
+                    reg.instance,
+                    reg.messageForDistributor,
+                    reg.vapid,
+                    distrib,
+                    null
+                )
+            }
+            // TODO Migrate KeyManager
+            return@migrateRegistrations true
+        }
+    }
+
     inner class DistributorStore() {
 
         /**
@@ -393,6 +416,7 @@ internal class DBStore(context: Context) :
         fun get(context: Context) = synchronized(this) {
             instance ?: DBStore(context.applicationContext).also { db ->
                 Log.d(TAG, "DBStore version $DB_VERSION")
+                db.migrateFromLegacy(context)
                 instance = db
             }
         }
