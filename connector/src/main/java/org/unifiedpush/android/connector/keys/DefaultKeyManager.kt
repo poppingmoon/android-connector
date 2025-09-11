@@ -3,8 +3,11 @@ package org.unifiedpush.android.connector.keys
 import android.content.Context
 import android.os.Build
 import com.google.crypto.tink.apps.fixed_webpush.WebPushHybridDecrypt
-import org.unifiedpush.android.connector.PREF_MASTER
 import org.unifiedpush.android.connector.data.PublicKeySet
+import org.unifiedpush.android.connector.internal.DBStore
+import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntries
+import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntries23
+import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntriesLegacy
 import java.security.interfaces.ECPrivateKey
 import java.security.interfaces.ECPublicKey
 
@@ -17,13 +20,13 @@ import java.security.interfaces.ECPublicKey
  * For SDK < 23, private keys are stored in plain text in shared preferences.
  */
 class DefaultKeyManager(context: Context) : KeyManager {
-    private val preferences = context.getSharedPreferences(PREF_MASTER, Context.MODE_PRIVATE)
+    private val store = DBStore.get(context).keys
 
     override fun decrypt(
         instance: String,
         sealed: ByteArray,
     ): ByteArray? {
-        val keys = getKeyStoreEntries(instance).getOrNullWebPushKeys() ?: return null
+        val keys = getKeyStoreEntries(instance).getWebPushKeys() ?: return null
         val hybridDecrypt =
             WebPushHybridDecrypt.Builder()
                 .withAuthSecret(keys.auth)
@@ -38,11 +41,11 @@ class DefaultKeyManager(context: Context) : KeyManager {
     }
 
     override fun getPublicKeySet(instance: String): PublicKeySet? {
-        return getKeyStoreEntries(instance).getOrNullWebPushKeys()?.publicKeySet
+        return getKeyStoreEntries(instance).getWebPushKeys()?.publicKeySet
     }
 
     override fun exists(instance: String): Boolean {
-        return getKeyStoreEntries(instance).getOrNullWebPushKeys() != null
+        return getKeyStoreEntries(instance).hasWebPushKeys()
     }
 
     override fun delete(instance: String) {
@@ -51,9 +54,9 @@ class DefaultKeyManager(context: Context) : KeyManager {
 
     private fun getKeyStoreEntries(instance: String): WebPushKeysEntries {
         return if (Build.VERSION.SDK_INT >= 23) {
-            WebPushKeysEntries23(instance, preferences)
+            WebPushKeysEntries23(instance, store)
         } else {
-            WebPushKeysEntriesLegacy(instance, preferences)
+            WebPushKeysEntriesLegacy(instance, store)
         }
     }
 }

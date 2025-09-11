@@ -10,6 +10,7 @@ import android.util.Log
 import org.unifiedpush.android.connector.TAG
 import org.unifiedpush.android.connector.internal.data.Distributor
 import org.unifiedpush.android.connector.internal.data.Registration
+import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
 import org.unifiedpush.android.connector.keys.KeyManager
 import java.util.UUID
 
@@ -18,12 +19,14 @@ internal class DBStore(context: Context) :
 
     val distributor = DistributorStore()
     val registrations = RegistrationsStore()
+    val keys = KeyStore()
 
     override fun onCreate(db: SQLiteDatabase) {
         Log.d(TAG, "Creating $DB_NAME")
         db.execSQL(CREATE_TABLE_DISTRIBUTORS)
         db.execSQL(CREATE_TABLE_REGISTRATIONS)
         db.execSQL(CREATE_TABLE_TOKENS)
+        db.execSQL(CREATE_TABLE_KEYS)
         // onUpgrade(db, 1, DB_VERSION)
         //TODO: Migration from SharedPrefs
     }
@@ -397,6 +400,72 @@ internal class DBStore(context: Context) :
         }
     }
 
+    inner class KeyStore() {
+        fun get(instance: String): WebPushKeysRecord? {
+            val db = readableDatabase
+            val selection = "$FIELD_INSTANCE = ?"
+            val selectionArgs = arrayOf(instance)
+            db.query(
+                TABLE_KEYS,
+                null,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                null
+            ).use {
+                it.moveToFirst() || return null
+                val authColumn = it.getColumnIndex(FIELD_AUTH)
+                val pubKeyColumn = it.getColumnIndex(FIELD_PUBKEY)
+                val privKeyColumn = it.getColumnIndex(FIELD_PRIVKEY)
+                val ivColumn = it.getColumnIndex(FIELD_IV)
+                val auth = if (authColumn >= 0) it.getString(authColumn) else return null
+                val pubKey = if (pubKeyColumn >= 0) it.getString(pubKeyColumn) else return null
+                val privKey = if (privKeyColumn >= 0) it.getString(privKeyColumn) else return null
+                val iv = if (ivColumn >= 0) it.getString(ivColumn) else null
+                return WebPushKeysRecord(
+                    instance,
+                    auth,
+                    pubKey,
+                    privKey,
+                    iv
+                )
+            }
+        }
+
+        /**
+         * Update or insert values from [record]
+         *
+         * If a record already contain keys for the instance, it is replaced.
+         */
+        fun set(record: WebPushKeysRecord) {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put(FIELD_INSTANCE, record.instance)
+                put(FIELD_AUTH, record.auth)
+                put(FIELD_PUBKEY, record.pubKey)
+                put(FIELD_PRIVKEY, record.privKey)
+                putNullable(FIELD_IV, record.iv)
+            }
+            db.insertWithOnConflict(
+                TABLE_KEYS,
+                null,
+                values,
+                SQLiteDatabase.CONFLICT_REPLACE
+                )
+        }
+
+        /**
+         * Remove keys for [instance]
+         */
+        fun remove(instance: String) {
+            val db = writableDatabase
+            val selection = "$FIELD_INSTANCE = ?"
+            val selectionArgs = arrayOf(instance)
+            db.delete(TABLE_KEYS, selection, selectionArgs)
+        }
+    }
+
     private fun ContentValues.putNullable(key: String, value: String?) {
         value?.let { put(key, it) } ?: putNull(key)
     }
@@ -460,6 +529,20 @@ internal class DBStore(context: Context) :
         private const val FIELD_CONNECTOR_TOKEN = "connectorToken"
 
         /**
+         * keys: for the [org.unifiedpush.android.connector.keys.DefaultKeyManager]
+         * - instance String, key, ref [TABLE_REGISTRATIONS].instance
+         * - auth, String
+         * - pubkey, String
+         * - privkey, String
+         * - iv, String, for encrypted privkey (SDK 23+)
+         */
+        private const val TABLE_KEYS = "keys"
+        private const val FIELD_AUTH = "auth"
+        private const val FIELD_PUBKEY = "pubkey"
+        private const val FIELD_PRIVKEY = "privkey"
+        private const val FIELD_IV = "iv"
+
+        /**
          * DO NOT EDIT! It is better to always run all the upgrades
          */
         private const val CREATE_TABLE_DISTRIBUTORS = "CREATE TABLE $TABLE_DISTRIBUTORS (" +
@@ -493,6 +576,19 @@ internal class DBStore(context: Context) :
                     " REFERENCES $TABLE_REGISTRATIONS($FIELD_INSTANCE) ON DELETE CASCADE," +
                 "FOREIGN KEY ($FIELD_DISTRIBUTOR)" +
                     " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE" +
+                ");"
+
+        /**
+         * DO NOT EDIT! It is better to always run all the upgrades
+         */
+        private const val CREATE_TABLE_KEYS = "CREATE TABLE $TABLE_KEYS (" +
+                "$FIELD_INSTANCE TEXT PRIMARY KEY," +
+                "$FIELD_AUTH TEXT," +
+                "$FIELD_PUBKEY TEXT," +
+                "$FIELD_PRIVKEY TEXT," +
+                "$FIELD_IV TEXT," +
+                "FOREIGN KEY ($FIELD_INSTANCE)" +
+                " REFERENCES $TABLE_REGISTRATIONS($FIELD_INSTANCE) ON DELETE CASCADE" +
                 ");"
 
     }
