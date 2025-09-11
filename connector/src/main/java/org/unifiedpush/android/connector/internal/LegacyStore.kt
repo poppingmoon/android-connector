@@ -2,17 +2,6 @@ package org.unifiedpush.android.connector.internal
 
 import android.content.Context
 import android.content.SharedPreferences
-import org.unifiedpush.android.connector.PREF_CONNECTOR_AUTH
-import org.unifiedpush.android.connector.PREF_CONNECTOR_IV
-import org.unifiedpush.android.connector.PREF_CONNECTOR_MESSAGE
-import org.unifiedpush.android.connector.PREF_CONNECTOR_PRIVKEY
-import org.unifiedpush.android.connector.PREF_CONNECTOR_PUBKEY
-import org.unifiedpush.android.connector.PREF_CONNECTOR_TOKEN
-import org.unifiedpush.android.connector.PREF_CONNECTOR_VAPID
-import org.unifiedpush.android.connector.PREF_MASTER
-import org.unifiedpush.android.connector.PREF_MASTER_DISTRIBUTOR
-import org.unifiedpush.android.connector.PREF_MASTER_DISTRIBUTOR_ACK
-import org.unifiedpush.android.connector.PREF_MASTER_INSTANCES
 import org.unifiedpush.android.connector.internal.data.Distributor
 import org.unifiedpush.android.connector.internal.data.Registration
 import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
@@ -88,5 +77,19 @@ internal class LegacyStore(context: Context) {
                 .remove(PREF_CONNECTOR_IV.format(instance))
                 .apply()
         }
+    }
+
+    companion object {
+        private const val PREF_MASTER = "unifiedpush.connector"
+        private const val PREF_MASTER_INSTANCES = "unifiedpush.instances"
+        private const val PREF_MASTER_DISTRIBUTOR = "unifiedpush.distributor"
+        private const val PREF_MASTER_DISTRIBUTOR_ACK = "unifiedpush.distributor_ack"
+        private const val PREF_CONNECTOR_TOKEN = "%s/unifiedpush.connector"
+        private const val PREF_CONNECTOR_VAPID = "%s/unifiedpush.vapid"
+        private const val PREF_CONNECTOR_MESSAGE = "%s/unifiedpush.message"
+        private const val PREF_CONNECTOR_IV = "%s/unifiedpush.webpush.iv"
+        private const val PREF_CONNECTOR_PUBKEY = "%s/unifiedpush.webpush.pubkey"
+        private const val PREF_CONNECTOR_PRIVKEY = "%s/unifiedpush.webpush.privkey"
+        private const val PREF_CONNECTOR_AUTH = "%s/unifiedpush.webpush.auth"
     }
 }

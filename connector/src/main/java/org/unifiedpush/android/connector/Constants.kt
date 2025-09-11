@@ -5,19 +5,6 @@ package org.unifiedpush.android.connector
  * https://unifiedpush.org/developers/spec/android/
  */
 
-internal const val PREF_MASTER = "unifiedpush.connector"
-internal const val PREF_MASTER_INSTANCES = "unifiedpush.instances"
-internal const val PREF_MASTER_DISTRIBUTOR = "unifiedpush.distributor"
-internal const val PREF_MASTER_DISTRIBUTOR_ACK = "unifiedpush.distributor_ack"
-
-internal const val PREF_CONNECTOR_TOKEN = "%s/unifiedpush.connector"
-internal const val PREF_CONNECTOR_VAPID = "%s/unifiedpush.vapid"
-internal const val PREF_CONNECTOR_MESSAGE = "%s/unifiedpush.message"
-internal const val PREF_CONNECTOR_IV = "%s/unifiedpush.webpush.iv"
-internal const val PREF_CONNECTOR_PUBKEY = "%s/unifiedpush.webpush.pubkey"
-internal const val PREF_CONNECTOR_PRIVKEY = "%s/unifiedpush.webpush.privkey"
-internal const val PREF_CONNECTOR_AUTH = "%s/unifiedpush.webpush.auth"
-
 internal const val ACTION_NEW_ENDPOINT = "org.unifiedpush.android.connector.NEW_ENDPOINT"
 internal const val ACTION_REGISTRATION_FAILED = "org.unifiedpush.android.connector.REGISTRATION_FAILED"
 internal const val ACTION_UNREGISTERED = "org.unifiedpush.android.connector.UNREGISTERED"
