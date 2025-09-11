@@ -12,7 +12,7 @@ import android.util.AndroidException
 import android.util.Log
 import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
-import org.unifiedpush.android.connector.internal.Registration
+import org.unifiedpush.android.connector.internal.data.Registration
 import org.unifiedpush.android.connector.keys.DefaultKeyManager
 import org.unifiedpush.android.connector.keys.KeyManager
 import kotlin.jvm.Throws

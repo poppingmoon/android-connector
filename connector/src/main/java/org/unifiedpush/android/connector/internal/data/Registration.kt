@@ -1,4 +1,4 @@
-package org.unifiedpush.android.connector.internal
+package org.unifiedpush.android.connector.internal.data
 
 /**
  * Internal object for a [Registration]

@@ -9,6 +9,8 @@ import org.unifiedpush.android.connector.PREF_MASTER
 import org.unifiedpush.android.connector.PREF_MASTER_DISTRIBUTOR
 import org.unifiedpush.android.connector.PREF_MASTER_DISTRIBUTOR_ACK
 import org.unifiedpush.android.connector.PREF_MASTER_INSTANCES
+import org.unifiedpush.android.connector.internal.data.Distributor
+import org.unifiedpush.android.connector.internal.data.Registration
 
 internal class LegacyStore(context: Context) {
     private var preferences: SharedPreferences = context

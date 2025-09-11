@@ -1,4 +1,4 @@
-package org.unifiedpush.android.connector.internal
+package org.unifiedpush.android.connector.internal.data
 
 /**
  * The main distributor is the one saved by the user

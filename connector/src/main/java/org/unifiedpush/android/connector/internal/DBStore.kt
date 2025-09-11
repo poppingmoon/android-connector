@@ -8,6 +8,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import org.unifiedpush.android.connector.TAG
+import org.unifiedpush.android.connector.internal.data.Distributor
+import org.unifiedpush.android.connector.internal.data.Registration
 import org.unifiedpush.android.connector.keys.KeyManager
 import java.util.UUID
 
