@@ -73,8 +73,11 @@ internal class DBStore(context: Context) :
                     distrib,
                     null
                 )
+                store.migrateWebPushKeysRecord(reg.instance) { rec ->
+                    keys.set(rec)
+                    return@migrateWebPushKeysRecord true
+                }
             }
-            // TODO Migrate KeyManager
             return@migrateRegistrations true
         }
     }
