@@ -71,7 +71,8 @@ internal class DBStore(context: Context) :
                     reg.messageForDistributor,
                     reg.vapid,
                     distrib,
-                    null
+                    null,
+                    reg.token
                 )
                 store.migrateWebPushKeysRecord(reg.instance) { rec ->
                     keys.set(rec)
@@ -284,6 +285,30 @@ internal class DBStore(context: Context) :
         }
 
         /**
+         * Save connection token for [instance] and [distributor]
+         *
+         * Used during the migration from shared prefs.
+         */
+        private fun saveToken(
+            instance: String,
+            distributor: String,
+            token: String,
+            db: SQLiteDatabase = writableDatabase
+        ) {
+            val values = ContentValues().apply {
+                put(FIELD_INSTANCE, instance)
+                put(FIELD_DISTRIBUTOR, distributor)
+                put(FIELD_CONNECTOR_TOKEN, token)
+            }
+            db.insertWithOnConflict(
+                TABLE_TOKENS,
+                null,
+                values,
+                SQLiteDatabase.CONFLICT_REPLACE
+            )
+        }
+
+        /**
          * Try to get the instance from the [connectionToken]
          */
         fun getInstance(connectionToken: String): String? {
@@ -311,6 +336,9 @@ internal class DBStore(context: Context) :
 
         /**
          * Set or update [instance]
+         *
+         * @param keyManager shoud not be null except in rare case (migration)
+         * @param token should stay null except in rare case (migration)
          */
         fun set(
             instance: String,
@@ -318,6 +346,7 @@ internal class DBStore(context: Context) :
             vapid: String?,
             distributor: Distributor,
             keyManager: KeyManager?,
+            token: String? = null,
         ): Registration {
             val db = writableDatabase
             return db.runTransaction {
@@ -336,12 +365,13 @@ internal class DBStore(context: Context) :
                     values,
                     SQLiteDatabase.CONFLICT_REPLACE
                 )
-                // TODO improve KeyManager ?
                 keyManager?.run {
                     if (!exists(instance)) generate(instance)
                 }
-                val token = getToken(instance, distributor.packageName, db)
-                    ?: newToken(instance, distributor.packageName, db)
+                val token = token?.also {
+                    saveToken(instance, distributor.packageName, it, db)
+                } ?: getToken(instance, distributor.packageName, db)
+                ?: newToken(instance, distributor.packageName, db)
                 return@runTransaction Registration(instance, token, messageForDistributor, vapid)
             }
         }
