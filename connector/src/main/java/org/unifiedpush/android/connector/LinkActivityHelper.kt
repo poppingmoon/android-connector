@@ -90,7 +90,7 @@ class LinkActivityHelper(private val activity: Activity) {
                 // targetPackage has been renamed creatorPackage after SDK 17
             }?.targetPackage?.let {
                 Log.d(TAG, "Using distributor $it.")
-                DBStore.get(activity).distributor.set(it)
+                DBStore.get(activity).distributor.setPrimary(it)
                 return true
             } ?: run {
                 Log.d(TAG, "Could not find creator of pending intent")

@@ -2,8 +2,9 @@ package org.unifiedpush.android.connector.internal
 
 import android.content.Context
 import android.content.SharedPreferences
+import org.unifiedpush.android.connector.internal.data.Connection
 import org.unifiedpush.android.connector.internal.data.Distributor
-import org.unifiedpush.android.connector.internal.data.Registration
+import org.unifiedpush.android.connector.internal.data.RegistrationData
 import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
 
 internal class LegacyStore(context: Context) {
@@ -34,15 +35,21 @@ internal class LegacyStore(context: Context) {
      *
      * @param block if returns `true`: remove the registration
      */
-    fun migrateRegistrations(block: (Registration) -> Boolean) {
+    fun migrateRegistrations(distributor: String?, block: (Connection.Registration) -> Boolean) {
         var failed = false
         preferences.getStringSet(PREF_MASTER_INSTANCES, null)?.forEach { instance ->
             val token = preferences.getString(PREF_CONNECTOR_TOKEN.format(instance), null)
             val message = preferences.getString(PREF_CONNECTOR_MESSAGE.format(instance), null)
             val vapid = preferences.getString(PREF_CONNECTOR_VAPID.format(instance), null)
             if (token == null ||
-                block(Registration(instance, token, message, vapid))
-                ) {
+                distributor == null ||
+                block(
+                    Connection.Registration(
+                        distributor,
+                        token,
+                        RegistrationData(instance, message, vapid)
+                    )
+                )) {
                 preferences.edit()
                     .remove(PREF_CONNECTOR_TOKEN.format(instance))
                     .remove(PREF_CONNECTOR_VAPID.format(instance))

@@ -24,6 +24,8 @@ internal const val EXTRA_REASON = "reason"
 internal const val EXTRA_VAPID = "vapid"
 internal const val EXTRA_BYTES_MESSAGE = "bytesMessage"
 internal const val EXTRA_MESSAGE_ID = "id"
+internal const val EXTRA_NEW_DISTRIBUTOR = "newDistributor"
+internal const val EXTRA_TEMP = "temp"
 
 internal const val WAKE_LOCK_TAG = "android-connector:lock"
 internal const val TAG = "UnifiedPush"

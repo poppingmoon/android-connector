@@ -103,52 +103,84 @@ abstract class MessagingReceiver : BroadcastReceiver() {
         val token = intent.getStringExtra(EXTRA_TOKEN)
         val store = DBStore.get(context)
         val keyManager = getKeyManager(context)
-        val instance =
-            token?.let {
-                store.registrations.getInstance(it)
-            } ?: return
+        val co = token?.let {
+            store.registrations.getInstance(it)
+        } ?: return
         val wakeLock = WakeLock(context)
         when (intent.action) {
             ACTION_NEW_ENDPOINT -> {
                 val endpoint = intent.getStringExtra(EXTRA_ENDPOINT) ?: return
                 val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
-                val pubKeys = keyManager.getPublicKeySet(instance)
-                store.distributor.ack()
-                onNewEndpoint(context, PushEndpoint(endpoint, pubKeys), instance)
-                store.distributor.get()?.packageName?.let {
-                    mayAcknowledgeMessage(context, it, id, token)
-                }
-                // TODO: handle Migration
+                val pubKeys = keyManager.getPublicKeySet(co.instance)
+                store.distributor.ack(co.distributor)
+                    .forEach {
+                        // If there were some fallbacks, they are now removed
+                        // And we can inform them now
+                        UnifiedPush.broadcastUnregister(context, it)
+                    }
+                onNewEndpoint(context, PushEndpoint(endpoint, pubKeys), co.instance)
+                mayAcknowledgeMessage(context, co.distributor, id, token)
             }
             ACTION_REGISTRATION_FAILED -> {
                 val reason = intent.getStringExtra(EXTRA_REASON).toFailedReason()
                 Log.i(TAG, "Failed: $reason")
-                store.registrations.remove(instance, keyManager)
-                onRegistrationFailed(context, reason, instance)
+                store.registrations.remove(co.instance, keyManager)
+                onRegistrationFailed(context, reason, co.instance)
+                // TODO: handle migration
             }
             ACTION_UNREGISTERED -> {
-                onUnregistered(context, instance)
-                store.registrations.remove(instance, keyManager).ifEmpty {
-                    store.distributor.remove()
+                intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
+                    if (intent.getBooleanExtra(EXTRA_TEMP, false)) {
+                        store.distributor.setFallback(co.distributor, distrib)
+                    } else {
+                        store.distributor.setPrimary(distrib)
+                    }.forEach { co ->
+                        // Broadcast UNREGISTER to potentially removed fallbacks
+                        UnifiedPush.broadcastUnregister(context, co)
+                    }
+                    // We re-send registration for the new distrib
+                    // Even if there is a case where it isn't really necessary:
+                    // When we had 2+ fallbacks: D1 -> D2 -> D3
+                    // And we have changed the primary to a another one, not in use (eg D1 to D2):
+                    // D2 -> D3 => this will send register to D3
+                    store.registrations.list().forEach { r ->
+                        UnifiedPush.register(
+                            context,
+                            r.instance,
+                            r.messageForDistributor,
+                            r.vapid,
+                            getKeyManager(context)
+                        )
+                    }
+                } ?: run {
+                    // When we receive UNREGISTERED from any distributor, it means the registration
+                    // have to be removed  for all of the fallbacks, and primary too
+                    // so we send UNREGISTER to all (pot. fallback) distrib
+                    // This is fine to send UNREGISTER to the distributor that send UNREGISTERED,
+                    // it should simply ignore the request.
+                    store.registrations.listToken(co.instance).forEach { co ->
+                        UnifiedPush.broadcastUnregister(context, co)
+                    }
+                    store.registrations.remove(co.instance, keyManager).ifEmpty {
+                        store.distributor.remove()
+                    }
+                    onUnregistered(context, co.instance)
                 }
-                // TODO: handle Migration
             }
             ACTION_MESSAGE -> {
                 val message = intent.getByteArrayExtra(EXTRA_BYTES_MESSAGE) ?: return
                 val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
                 val pushMessage =
                     try {
-                        keyManager.decrypt(instance, message)?.let {
+                        keyManager.decrypt(co.instance, message)?.let {
                             PushMessage(it, true)
                         } ?: PushMessage(message, false)
                     } catch (e: GeneralSecurityException) {
                         Log.w(TAG, "Could not decrypt message, trying with plain text. Cause: ${e.message}")
                         PushMessage(message, false)
                     }
-                onMessage(context, pushMessage, instance)
-                store.distributor.get()?.packageName?.let {
-                    mayAcknowledgeMessage(context, it, id, token)
-                }
+                onMessage(context, pushMessage, co.instance)
+                mayAcknowledgeMessage(context, co.distributor, id, token)
             }
         }
         wakeLock.release()

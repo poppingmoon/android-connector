@@ -9,8 +9,9 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import org.unifiedpush.android.connector.TAG
 import org.unifiedpush.android.connector.internal.data.Distributor
-import org.unifiedpush.android.connector.internal.data.Registration
+import org.unifiedpush.android.connector.internal.data.RegistrationData
 import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
+import org.unifiedpush.android.connector.internal.data.Connection
 import org.unifiedpush.android.connector.keys.KeyManager
 import java.util.UUID
 
@@ -59,25 +60,23 @@ internal class DBStore(context: Context) :
     fun migrateFromLegacy(context: Context) {
         val store = LegacyStore(context)
         store.migrateDistributor {
-            distributor.set(it.packageName)
-            if (it.ack) distributor.ack()
+            distributor.setPrimary(it.packageName)
+            if (it.ack) distributor.ack(it.packageName)
             return@migrateDistributor true
         }
         val distrib = distributor.get()
-        store.migrateRegistrations { reg ->
-            distrib?.let {
-                registrations.set(
-                    reg.instance,
-                    reg.messageForDistributor,
-                    reg.vapid,
-                    distrib,
-                    null,
-                    reg.token
-                )
-                store.migrateWebPushKeysRecord(reg.instance) { rec ->
-                    keys.set(rec)
-                    return@migrateWebPushKeysRecord true
-                }
+        store.migrateRegistrations(distrib?.packageName) { co ->
+            registrations.set(
+                co.registration.instance,
+                co.registration.messageForDistributor,
+                co.registration.vapid,
+                co.distributor,
+                null,
+                co.token
+            )
+            store.migrateWebPushKeysRecord(co.registration.instance) { rec ->
+                keys.set(rec)
+                return@migrateWebPushKeysRecord true
             }
             return@migrateRegistrations true
         }
@@ -86,8 +85,7 @@ internal class DBStore(context: Context) :
     inner class DistributorStore() {
 
         /**
-         * Change primary distributor, remove the previous one
-         * and fallback distributors.
+         * Change primary distributor, remove the previous one and its fallback distributors.
          *
          * The connection tokens for the previous distributor(s) are
          * wiped,
@@ -96,10 +94,12 @@ internal class DBStore(context: Context) :
          *
          * If the distributor is known as a fallback one, update it to make it primary
          *
-         * The new distributor isn't acknowledged yet and don't have
+         * If this is a new distributor, it isn't acknowledged yet and don't have
          * any fallback.
+         *
+         * @return a set of removed [Connection.Token], so it is possible to send UNREGISTER to them
          */
-        fun set(distributor: String) {
+        fun setPrimary(distributor: String): Set<Connection.Token> {
             /**
              * We used to do that, but this isn't necessary anymore
              * ```
@@ -110,9 +110,10 @@ internal class DBStore(context: Context) :
              * ```
              */
             val db = writableDatabase
+            var fallbacks = emptySet<Connection.Token>()
             db.runTransaction {
                 val projection = arrayOf(FIELD_FALLBACK_FROM)
-                val selection = "$FIELD_DISTRIBUTOR = ?"
+                var selection = "$FIELD_DISTRIBUTOR = ?"
                 val selectionArgs = arrayOf(distributor)
                 val exists = db.query(
                     TABLE_DISTRIBUTORS,
@@ -127,18 +128,16 @@ internal class DBStore(context: Context) :
                 }
 
                 if (exists) {
-                    // 1. Update the fallback distrib to be a primary distrib (fallback_from = NULL)
+                    // 1.A. Update the fallback distrib to be a primary distrib (fallback_from = NULL)
                     val values = ContentValues().apply {
                         putNull(FIELD_FALLBACK_FROM)
                     }
-                    var selection = "$FIELD_DISTRIBUTOR = ?"
+                    val selection = "$FIELD_DISTRIBUTOR = ?"
                     val selectionArgs = arrayOf(distributor)
                     db.update(TABLE_DISTRIBUTORS, values, selection, selectionArgs)
 
-                    // 2. Remove the previous primary distrib and its fallbacks (with the cascade)
-                    selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM is NULL"
-                    db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
                 } else {
+                    // 1.B. Insert the new distrib
                     val values = ContentValues().apply {
                         put(FIELD_DISTRIBUTOR, distributor)
                         put(FIELD_ACK, 0)
@@ -152,7 +151,78 @@ internal class DBStore(context: Context) :
                         SQLiteDatabase.CONFLICT_REPLACE
                     )
                 }
+
+                // 2. Remove the previous primary distrib and its fallbacks (with the cascade)
+                selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM is NULL"
+                fallbacks = getFallbacksOf(selection, selectionArgs)
+                db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
             }
+            return fallbacks
+        }
+
+        /**
+         * Set fallback distributor.
+         *
+         * If a fallback distrib isn't used anymore, remove it and its fallback distributors.
+         * The connection tokens for the previous distributor(s) are
+         * wiped.
+         *
+         * Does nothing if the distributor is already saved as a primary or fallback distrib
+         *
+         * @return a set of removed [Connection.Token], so it is possible to send UNREGISTER to them
+         */
+        fun setFallback(from: String, to: String): Set<Connection.Token> {
+            /**
+             * We used to do that, but this isn't necessary anymore
+             * ```
+             *         if (store.tryGetDistributor() != distributor) {
+             *             store.distributorAck = false
+             *             store.saveDistributor(distributor)
+             *         }
+             * ```
+             */
+            val db = writableDatabase
+            var fallbacks = emptySet<Connection.Token>()
+            db.runTransaction {
+                val projection = arrayOf(FIELD_FALLBACK_FROM)
+                var selection = "$FIELD_DISTRIBUTOR = ?"
+                var selectionArgs = arrayOf(to)
+                val exists = db.query(
+                    TABLE_DISTRIBUTORS,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    null,
+                    null,
+                    null
+                ).use {
+                    it.moveToFirst()
+                }
+
+                // We ignore the fallback if we already rely on it, to avoid cyclic fallback
+                if (!exists) {
+                    val values = ContentValues().apply {
+                        put(FIELD_DISTRIBUTOR, to)
+                        put(FIELD_ACK, 0)
+                        put(FIELD_FALLBACK_FROM, from)
+                        putNull(FIELD_FALLBACK_TO)
+                    }
+                    db.insertWithOnConflict(
+                        TABLE_DISTRIBUTORS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                    )
+
+                    // 2. Remove the previous distrib that was falling back from the same from
+                    // and its fallbacks (with the cascade)
+                    selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM = ?"
+                    selectionArgs = arrayOf(to, from)
+                    fallbacks = getFallbacksOf(selection, selectionArgs)
+                    db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
+                }
+            }
+            return fallbacks
         }
 
         /**
@@ -178,15 +248,78 @@ internal class DBStore(context: Context) :
         }
 
         /**
+         * Acknowledge [distributor] and remove its fallbacks
+         *
          * Set distributor ack to true
+         *
+         * @return the set of removed distributor and their registration token
          */
-        fun ack() {
+        fun ack(distributor: String): Set<Connection.Token> {
             val db = writableDatabase
-            val selection = "$FIELD_FALLBACK_TO IS NULL"
-            val values = ContentValues().apply {
-                put(FIELD_ACK, true)
+            var fallbacks = emptySet<Connection.Token>()
+
+            db.runTransaction {
+                // 1. set ack = true
+                var selection = "$FIELD_DISTRIBUTOR = ?"
+                val selectionArgs = arrayOf(distributor)
+                val values = ContentValues().apply {
+                    put(FIELD_ACK, 1)
+                }
+                db.update(TABLE_DISTRIBUTORS, values, selection, selectionArgs)
+
+                // 2. get list of fallbacks connections
+                fallbacks = getFallbacksOf(selection, selectionArgs, db)
+
+                // 3. Delete fallbacks
+                //     - the cascade will delete next fallbacks, and associated tokens
+                //     - fallback_to will be set to null
+                selection = "$FIELD_FALLBACK_FROM = ?"
+                db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
             }
-            db.update(TABLE_DISTRIBUTORS, values, selection, null)
+
+            return fallbacks
+        }
+
+        /**
+         * get fallbacks from [originSelection]
+         *
+         * @return a set of [Connection.Token] for the fallback connections
+         */
+        fun getFallbacksOf(
+            originSelection: String,
+            originSelectionArgs: Array<String>,
+            db: SQLiteDatabase = writableDatabase
+        ) : Set<Connection.Token> {
+            val query =
+                "WITH RECURSIVE rec(origin, $FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO) AS (" +
+                        "SELECT 1, $FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO" +
+                        " FROM $TABLE_DISTRIBUTORS" +
+                        " WHERE %s".format(originSelection) +
+                        " UNION ALL" +
+                        " SELECT 0, t.$FIELD_DISTRIBUTOR, t.$FIELD_FALLBACK_TO" +
+                        " FROM $TABLE_DISTRIBUTORS t" +
+                        " JOIN rec ON t.$FIELD_DISTRIBUTOR = rec.$FIELD_FALLBACK_TO" +
+                        "   AND t.$FIELD_FALLBACK_FROM = rec.$FIELD_DISTRIBUTOR" +
+                        ") " +
+                        " SELECT rec.$FIELD_DISTRIBUTOR, t.$FIELD_CONNECTOR_TOKEN" +
+                        " FROM rec" +
+                        " INNER JOIN $TABLE_TOKENS t" +
+                        " ON rec.$FIELD_DISTRIBUTOR = t.$FIELD_DISTRIBUTOR" +
+                        " WHERE origin = 0"
+            return db.rawQuery(query, originSelectionArgs)
+                .use {
+                    val distribColumn = it.getColumnIndex(FIELD_DISTRIBUTOR)
+                    val tokenColumn = it.getColumnIndex(FIELD_CONNECTOR_TOKEN)
+                    if (distribColumn < 0 || tokenColumn < 0) return@use emptySet()
+                    generateSequence {
+                        if (it.moveToNext()) it else null
+                    }.map { r ->
+                        Connection.Token(
+                            r.getString(distribColumn),
+                            r.getString(tokenColumn)
+                        )
+                    }.toSet()
+                }
         }
 
         /**
@@ -311,9 +444,9 @@ internal class DBStore(context: Context) :
         /**
          * Try to get the instance from the [connectionToken]
          */
-        fun getInstance(connectionToken: String): String? {
+        fun getInstance(connectionToken: String): Connection.Instance? {
             val db = readableDatabase
-            val projection = arrayOf(FIELD_INSTANCE)
+            val projection = arrayOf(FIELD_INSTANCE, FIELD_DISTRIBUTOR)
             val selection = "$FIELD_CONNECTOR_TOKEN = ?"
             val selectionArgs = arrayOf(connectionToken)
             return db.query(
@@ -321,13 +454,17 @@ internal class DBStore(context: Context) :
                 projection,
                 selection,
                 selectionArgs,
-                null,
-                null,
-                null
+                null, null, null
             ).use {
-                val col = it.getColumnIndex(FIELD_INSTANCE)
-                if (it.moveToFirst() && col >= 0) {
-                    it.getString(col)
+                val distribCol = it.getColumnIndex(FIELD_DISTRIBUTOR)
+                val instanceCol = it.getColumnIndex(FIELD_INSTANCE)
+                if (it.moveToFirst()
+                    && distribCol >= 0
+                    && instanceCol >= 0) {
+                    Connection.Instance(
+                        it.getString(distribCol),
+                        it.getString(instanceCol)
+                    )
                 } else {
                     null
                 }
@@ -344,10 +481,10 @@ internal class DBStore(context: Context) :
             instance: String,
             messageForDistributor: String?,
             vapid: String?,
-            distributor: Distributor,
+            distributor: String,
             keyManager: KeyManager?,
             token: String? = null,
-        ): Registration {
+        ): Connection.Registration {
             val db = writableDatabase
             return db.runTransaction {
                 val values = ContentValues().apply {
@@ -369,15 +506,21 @@ internal class DBStore(context: Context) :
                     if (!exists(instance)) generate(instance)
                 }
                 val token = token?.also {
-                    saveToken(instance, distributor.packageName, it, db)
-                } ?: getToken(instance, distributor.packageName, db)
-                ?: newToken(instance, distributor.packageName, db)
-                return@runTransaction Registration(instance, token, messageForDistributor, vapid)
+                    saveToken(instance, distributor, it, db)
+                } ?: getToken(instance, distributor, db)
+                ?: newToken(instance, distributor, db)
+                return@runTransaction Connection.Registration(
+                    distributor,
+                    token,
+                    RegistrationData(instance, messageForDistributor, vapid)
+                )
             }
         }
 
         /**
          * Remove [instance]
+         *
+         * @return list of remaining instances
          */
         fun remove(
             instance: String,
@@ -411,6 +554,33 @@ internal class DBStore(context: Context) :
         }
 
         /**
+         * List all registrations
+         */
+        fun list(db: SQLiteDatabase = readableDatabase): Set<RegistrationData> {
+            return db.query(TABLE_REGISTRATIONS, null, null, null, null, null, null)
+                .use {
+                    val instanceCol = it.getColumnIndex(FIELD_INSTANCE)
+                    val msgCol = it.getColumnIndex(FIELD_MESSAGE)
+                    val vapidCol = it.getColumnIndex(FIELD_VAPID)
+                    if (instanceCol >= 0 ||
+                        msgCol >= 0 ||
+                        vapidCol >= 0) {
+                        generateSequence {
+                            if (it.moveToNext()) it else null
+                        }.map { r ->
+                            RegistrationData(
+                                r.getString(instanceCol),
+                                r.getNullableString(msgCol),
+                                r.getNullableString(vapidCol)
+                            )
+                        }.toSet()
+                    } else {
+                        emptySet()
+                    }
+                }
+        }
+
+        /**
          * List all instances
          *
          * @return set of instances (String)
@@ -430,6 +600,42 @@ internal class DBStore(context: Context) :
                         emptySet()
                     }
                 }
+        }
+
+        /**
+         * List all distrib + token for an instance
+         *
+         * @return set of [Connection.Token]
+         */
+        fun listToken(
+            instance: String,
+            db: SQLiteDatabase = readableDatabase
+        ): Set<Connection.Token> {
+            val selection = "$FIELD_INSTANCE = ?"
+            val selectionArg = arrayOf(instance)
+            val projection = arrayOf(FIELD_DISTRIBUTOR, FIELD_CONNECTOR_TOKEN)
+            return db.query(
+                TABLE_TOKENS,
+                projection,
+                selection,
+                selectionArg,
+                null, null, null
+            ).use {
+                val distribCol = it.getColumnIndex(FIELD_DISTRIBUTOR)
+                val tokenCol = it.getColumnIndex(FIELD_CONNECTOR_TOKEN)
+                if (distribCol >= 0 && tokenCol >= 0) {
+                    generateSequence {
+                        if (it.moveToNext()) it else null
+                    }.map { r ->
+                        Connection.Token(
+                            it.getString(distribCol),
+                            it.getString(tokenCol)
+                        )
+                    }.toSet()
+                } else {
+                    emptySet()
+                }
+            }
         }
     }
 
@@ -501,6 +707,11 @@ internal class DBStore(context: Context) :
 
     private fun ContentValues.putNullable(key: String, value: String?) {
         value?.let { put(key, it) } ?: putNull(key)
+    }
+
+    private fun Cursor.getNullableString(col: Int): String? {
+        return if (isNull(col)) null
+        else getString(col)
     }
 
     private fun <T> SQLiteDatabase.runTransaction(block: () -> T): T {

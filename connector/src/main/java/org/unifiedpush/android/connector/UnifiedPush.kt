@@ -12,7 +12,7 @@ import android.util.AndroidException
 import android.util.Log
 import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
-import org.unifiedpush.android.connector.internal.data.Registration
+import org.unifiedpush.android.connector.internal.data.Connection
 import org.unifiedpush.android.connector.keys.DefaultKeyManager
 import org.unifiedpush.android.connector.keys.KeyManager
 import kotlin.jvm.Throws
@@ -228,14 +228,13 @@ object UnifiedPush {
         val distributor = store.distributor.get() ?: return
         register(
             context,
-            distributor.packageName,
             store.registrations.set(
                 instance,
                 messageForDistributor,
                 vapid?.replace("=", ""),
-                distributor,
+                distributor.packageName,
                 keyManager
-            ),
+            )
         )
     }
 
@@ -243,10 +242,9 @@ object UnifiedPush {
     @Throws(VapidNotValidException::class)
     private fun register(
         context: Context,
-        distributor: String,
-        registration: Registration,
+        co: Connection.Registration,
     ) {
-        registration.vapid?.let {
+        co.registration.vapid?.let {
             // This is mainly to catch VAPID used with the wrong format,
             // no need to check if this is a real vapid key
             if (!VAPID_REGEX.matches(it)) {
@@ -260,19 +258,19 @@ object UnifiedPush {
 
         val broadcastIntent =
             Intent().apply {
-                `package` = distributor
+                `package` = co.distributor
                 action = ACTION_REGISTER
-                putExtra(EXTRA_TOKEN, registration.token)
+                putExtra(EXTRA_TOKEN, co.token)
                 // For compatibility with AND_2
                 putExtra(EXTRA_FEATURES, arrayOf(FEATURE_BYTES_MESSAGE))
                 // For compatibility with AND_2, replaced by pi for SDK < 34
                 putExtra(EXTRA_APPLICATION, context.packageName)
                 // For SDK < 34
                 putExtra(EXTRA_PI, pi)
-                registration.messageForDistributor?.let {
+                co.registration.messageForDistributor?.let {
                     putExtra(EXTRA_MESSAGE_FOR_DISTRIB, it)
                 }
-                registration.vapid?.let {
+                co.registration.vapid?.let {
                     putExtra(EXTRA_VAPID, it)
                 }
             }
@@ -328,23 +326,31 @@ object UnifiedPush {
                 return
             }
 
+        val token = store.registrations.getToken(instance, distributor) ?: return
+        store.registrations.remove(instance, keyManager).ifEmpty {
+            store.distributor.remove()
+        }
+
+        broadcastUnregister(context, Connection.Token(distributor, token))
+    }
+
+    internal fun broadcastUnregister(
+        context: Context,
+        connection: Connection.Token
+    ) {
+
         // For SDK < 34
         val dummyIntent = Intent("org.unifiedpush.dummy_app")
         val pi = PendingIntent.getBroadcast(context, 0, dummyIntent, PendingIntent.FLAG_IMMUTABLE)
 
-
-        val token = store.registrations.getToken(instance, distributor) ?: return
         val broadcastIntent =
             Intent().apply {
-                `package` = distributor
+                `package` = connection.distributor
                 action = ACTION_UNREGISTER
-                putExtra(EXTRA_TOKEN, token)
+                putExtra(EXTRA_TOKEN, connection.token)
                 // For SDK < 34
                 putExtra(EXTRA_PI, pi)
             }
-        store.registrations.remove(instance, keyManager).ifEmpty {
-            store.distributor.remove()
-        }
 
         if (Build.VERSION.SDK_INT >= 34) {
             val broadcastOptions = BroadcastOptions.makeBasic().setShareIdentityEnabled(true)
@@ -546,7 +552,7 @@ object UnifiedPush {
         // There is no reason saveDistributor is called with an
         // uninstalled distributor, and if in any case it is,
         // get*Distributor checks if it is installed.
-        store.distributor.set(distributor)
+        store.distributor.setPrimary(distributor)
     }
 
     /**
