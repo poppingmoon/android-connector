@@ -595,27 +595,22 @@ object UnifiedPush {
         store: DBStore,
         ack: Boolean,
     ): String? {
-        val distributor = store.distributor.get() ?: return null
-        if (ack && !distributor.ack) {
-            return null
-        }
-        return if (distributor.packageName in getDistributors(context)) {
-            Log.d(TAG, "Found saved distributor.")
-            distributor.packageName
-        } else {
-            Log.d(TAG, "There was a distributor, but it isn't installed anymore")
-            store.registrations.listInstances().forEach { instance ->
-                store.registrations.getToken(
-                    instance,
-                    distributor.packageName
-                )?.let { token ->
-                    broadcastLocalUnregistered(context, token)
-                }
-            }
-            // TODO: handle migration
-            // distributor.disableLast
-            // return getDistributor(context, store, ack)
+        val savedDistributors = store.distributor.list()
+        val availableDistributors = getDistributors(context)
+        return if (savedDistributors.isEmpty()) {
             null
+        } else if (savedDistributors.none { it.packageName in availableDistributors}) {
+            Log.d(TAG, "There was a distributor, but it isn't installed anymore")
+            store.registrations.listToken(null).forEach { t ->
+                broadcastLocalUnregistered(context, t.token)
+            }
+            null
+        } else {
+            savedDistributors.filter { it.packageName !in availableDistributors }
+                .forEach {
+                store.distributor.remove(it.packageName)
+            }
+            store.distributor.get().takeIf { !ack || it?.ack == true }?.packageName
         }
     }
 

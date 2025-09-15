@@ -331,6 +331,53 @@ internal class DBStore(context: Context) :
             db.delete(TABLE_DISTRIBUTORS, null, null)
         }
 
+        /**
+         * Remove [distributor] and fix the fallback chain
+         */
+        fun remove(distributor: String) {
+            val db = writableDatabase
+            db.runTransaction {
+                // 1. change fallback_to of the previous distrib
+                var query = "UPDATE $TABLE_DISTRIBUTORS" +
+                        " SET $FIELD_FALLBACK_TO = (" +
+                        "   SELECT $FIELD_FALLBACK_TO" +
+                        "   FROM $TABLE_DISTRIBUTORS" +
+                        "   WHERE $FIELD_DISTRIBUTOR = ?" +
+                        ")" +
+                        " WHERE $FIELD_FALLBACK_TO = ?"
+                var selectionArgs = arrayOf(distributor, distributor)
+                // 2. change fallback_from of the next distrib
+                db.rawQuery(query, selectionArgs).close()
+                query = "UPDATE $TABLE_DISTRIBUTORS" +
+                        " SET $FIELD_FALLBACK_FROM = (" +
+                        "   SELECT $FIELD_FALLBACK_FROM" +
+                        "   FROM $TABLE_DISTRIBUTORS" +
+                        "   WHERE $FIELD_DISTRIBUTOR = ?" +
+                        ")" +
+                        " WHERE $FIELD_FALLBACK_FROM = ?"
+                db.rawQuery(query, selectionArgs).close()
+                // 3. delete distributor
+                val selection = "$FIELD_DISTRIBUTOR = ?"
+                selectionArgs = arrayOf(distributor)
+                db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
+            }
+        }
+
+        /**
+         * List all distributors
+         */
+        fun list(): Set<Distributor> {
+            val db = readableDatabase
+            return db.query(TABLE_DISTRIBUTORS, null, null, null, null, null, null)
+                .use {
+                    generateSequence {
+                        if (it.moveToNext()) it else null
+                    }.mapNotNull { c ->
+                        c.distributor()
+                    }.toSet()
+                }
+        }
+
 
         /**
          * Get [Distributor] from a query cursor
@@ -603,16 +650,16 @@ internal class DBStore(context: Context) :
         }
 
         /**
-         * List all distrib + token for an instance
+         * List all distrib + token for an instance if given
          *
          * @return set of [Connection.Token]
          */
         fun listToken(
-            instance: String,
+            instance: String?,
             db: SQLiteDatabase = readableDatabase
         ): Set<Connection.Token> {
-            val selection = "$FIELD_INSTANCE = ?"
-            val selectionArg = arrayOf(instance)
+            val selection = instance?.let { "$FIELD_INSTANCE = ?" }
+            val selectionArg = instance?.let { arrayOf(it) }
             val projection = arrayOf(FIELD_DISTRIBUTOR, FIELD_CONNECTOR_TOKEN)
             return db.query(
                 TABLE_TOKENS,
