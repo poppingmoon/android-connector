@@ -226,6 +226,7 @@ object UnifiedPush {
     ) {
         val store = DBStore.get(context)
         val distributor = store.distributor.get() ?: return
+        //TODO SEND to all distributors
         register(
             context,
             store.registrations.set(
@@ -286,6 +287,7 @@ object UnifiedPush {
      * Send an unregistration request for the [instance] to the saved distributor and remove the registration. Remove the distributor if this is the last instance registered.
      *
      * [MessagingReceiver.onUnregistered] won't be called after that request.
+     * Sends the unregistration request to the fallback distributor as well if there is one
      *
      * @param [context] To interact with the shared preferences and send broadcast intents.
      * @param [instance] Registration instance. Can be used to get multiple registrations, eg. for multi-account support.
@@ -318,20 +320,15 @@ object UnifiedPush {
         keyManager: KeyManager,
     ) {
         val store = DBStore.get(context)
-        val distributor =
-            getDistributor(context, store, false) ?: run {
-                // TODO: FALLBACK to previous !
-                store.registrations.removeAll(keyManager)
-                store.distributor.remove()
-                return
-            }
-
-        val token = store.registrations.getToken(instance, distributor) ?: return
+        // We don't need to check if the distributor is still installed, as we delete the registration after that
+        // And we send UNREGISTER to all distributors (primary/fallbacks) if we have many
+        val tokens = store.registrations.listToken(instance)
         store.registrations.remove(instance, keyManager).ifEmpty {
             store.distributor.remove()
         }
-
-        broadcastUnregister(context, Connection.Token(distributor, token))
+        tokens.forEach {
+            broadcastUnregister(context, it)
+        }
     }
 
     internal fun broadcastUnregister(

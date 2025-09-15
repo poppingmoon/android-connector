@@ -158,12 +158,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                     // so we send UNREGISTER to all (pot. fallback) distrib
                     // This is fine to send UNREGISTER to the distributor that send UNREGISTERED,
                     // it should simply ignore the request.
-                    store.registrations.listToken(co.instance).forEach { co ->
-                        UnifiedPush.broadcastUnregister(context, co)
-                    }
-                    store.registrations.remove(co.instance, keyManager).ifEmpty {
-                        store.distributor.remove()
-                    }
+                    UnifiedPush.unregister(context, co.instance, keyManager)
                     onUnregistered(context, co.instance)
                 }
             }
