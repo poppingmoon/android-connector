@@ -386,17 +386,13 @@ internal class DBStore(context: Context) :
             moveToFirst() || return null
             val distribColumn = getColumnIndex(FIELD_DISTRIBUTOR)
             val ackColumn = getColumnIndex(FIELD_ACK)
-            val fallbackFromColumn = getColumnIndex(FIELD_FALLBACK_FROM)
-            val fallbackToColumn = getColumnIndex(FIELD_FALLBACK_TO)
 
             val packageName = (
                     if (distribColumn >= 0) getString(distribColumn) else null
                     ) ?: return null
             val ack = if (ackColumn >= 0) getInt(ackColumn) != 0 else false
-            val fallbackFrom = if (fallbackFromColumn >= 0) getString(fallbackFromColumn) else null
-            val fallbackTo = if (fallbackToColumn >= 0) getString(fallbackToColumn) else null
 
-            return Distributor(packageName, ack, fallbackFrom, fallbackTo)
+            return Distributor(packageName, ack)
         }
     }
 
