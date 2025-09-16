@@ -299,6 +299,27 @@ internal class DBStore(context: Context) :
         }
 
         /**
+         * Is the distributor the primary one (not a temp fallback)
+         */
+        fun isPrimary(distributor: String): Boolean {
+            val db = readableDatabase
+            val projection = arrayOf(FIELD_DISTRIBUTOR)
+            val selection = "$FIELD_DISTRIBUTOR = ? AND $FIELD_FALLBACK_FROM IS NULL"
+            val selectionArgs = arrayOf(distributor)
+            return db.query(
+                TABLE_DISTRIBUTORS,
+                projection,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                null
+            ).use {
+                it.moveToFirst()
+            }
+        }
+
+        /**
          * Acknowledge [distributor] and remove its fallbacks
          *
          * Set distributor ack to true

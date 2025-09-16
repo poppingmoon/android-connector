@@ -136,7 +136,12 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                         // And we can inform them now
                         UnifiedPush.broadcastUnregister(context, it)
                     }
-                onNewEndpoint(context, PushEndpoint(endpoint, pubKeys), co.instance)
+                val primary = store.distributor.isPrimary(co.distributor)
+                onNewEndpoint(
+                    context,
+                    PushEndpoint(endpoint, pubKeys, !primary),
+                    co.instance
+                )
                 mayAcknowledgeMessage(context, co.distributor, id, token)
             }
             ACTION_REGISTRATION_FAILED -> {
