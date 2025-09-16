@@ -124,9 +124,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
             ACTION_REGISTRATION_FAILED -> {
                 val reason = intent.getStringExtra(EXTRA_REASON).toFailedReason()
                 Log.i(TAG, "Failed: $reason")
-                store.registrations.remove(co.instance, keyManager)
                 onRegistrationFailed(context, reason, co.instance)
-                // TODO: handle migration
             }
             ACTION_UNREGISTERED -> {
                 intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
