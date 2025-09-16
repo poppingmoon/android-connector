@@ -96,9 +96,12 @@ internal class DBStore(context: Context) :
          * If this is a new distributor, it isn't acknowledged yet and don't have
          * any fallback.
          *
-         * @return a set of removed [Connection.Token], so it is possible to send UNREGISTER to them
+         * @return `(new, toDel)`:
+         *   * `new`: whether this is a new distributor
+         *   * `toDel` is a set of removed [Connection.Token], so it is possible to send
+         *   UNREGISTER to them
          */
-        fun setPrimary(distributor: String): Set<Connection.Token> {
+        fun setPrimary(distributor: String): Pair<Boolean, Set<Connection.Token>> {
             /**
              * We used to do that, but this isn't necessary anymore
              * ```
@@ -110,11 +113,12 @@ internal class DBStore(context: Context) :
              */
             val db = writableDatabase
             var fallbacks = emptySet<Connection.Token>()
+            var exists = false
             db.runTransaction {
                 val projection = arrayOf(FIELD_FALLBACK_FROM)
                 var selection = "$FIELD_DISTRIBUTOR = ?"
                 val selectionArgs = arrayOf(distributor)
-                val exists = db.query(
+                exists = db.query(
                     TABLE_DISTRIBUTORS,
                     projection,
                     selection,
@@ -156,7 +160,7 @@ internal class DBStore(context: Context) :
                 fallbacks = getFallbackToChain(selection, selectionArgs)
                 db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
             }
-            return fallbacks
+            return Pair(!exists, fallbacks)
         }
 
         /**

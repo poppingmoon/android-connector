@@ -180,23 +180,21 @@ abstract class MessagingReceiver : BroadcastReceiver() {
             }
             ACTION_UNREGISTERED -> {
                 intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
-                    store.distributor.setPrimary(distrib).forEach { co ->
+                    val (new, toDel) = store.distributor.setPrimary(distrib)
+                    toDel.forEach { co ->
                         // Broadcast UNREGISTER to potentially removed fallbacks
                         UnifiedPush.broadcastUnregister(context, co)
                     }
-                    // We re-send registration for the new distrib
-                    // Even if there is a case where it isn't really necessary:
-                    // When we had 2+ fallbacks: D1 -> D2 -> D3
-                    // And we have changed the primary to a another one, not in use (eg D1 to D2):
-                    // D2 -> D3 => this will send register to D3
-                    store.registrations.list().forEach { r ->
-                        UnifiedPush.register(
-                            context,
-                            r.instance,
-                            r.messageForDistributor,
-                            r.vapid,
-                            getKeyManager(context)
-                        )
+                    if (new) {
+                        store.registrations.list().forEach { r ->
+                            UnifiedPush.register(
+                                context,
+                                r.instance,
+                                r.messageForDistributor,
+                                r.vapid,
+                                getKeyManager(context)
+                            )
+                        }
                     }
                 } ?: run {
                     // When we receive UNREGISTERED from any distributor, it means the registration
