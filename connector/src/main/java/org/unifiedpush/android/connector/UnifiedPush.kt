@@ -214,7 +214,7 @@ object UnifiedPush {
     /**
      * [register] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manager web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
      */
     @JvmStatic
     fun register(
@@ -307,7 +307,7 @@ object UnifiedPush {
     /**
      * [unregister] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manager web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
      */
     @JvmStatic
     fun unregister(
@@ -664,7 +664,7 @@ object UnifiedPush {
     /**
      * [removeDistributor] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manager web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
      */
     @JvmStatic
     fun removeDistributor(
