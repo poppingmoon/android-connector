@@ -152,11 +152,25 @@ abstract class MessagingReceiver : BroadcastReceiver() {
             ACTION_TEMP_UNAVAILABLE -> {
                 intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
                     try {
-                        store.distributor.setFallback(co.distributor, distrib)
-                            .forEach { co ->
-                                // Broadcast UNREGISTER to potentially removed fallbacks
-                                UnifiedPush.broadcastUnregister(context, co)
+                        val (new, toDel) = store.distributor.setFallback(co.distributor, distrib)
+                        toDel.forEach { co ->
+                            // Broadcast UNREGISTER to potentially removed fallbacks
+                            UnifiedPush.broadcastUnregister(context, co)
+                        }
+                        if (new) {
+                            store.registrations.list().forEach { co ->
+                                store.registrations.set(
+                                    co.instance,
+                                    co.messageForDistributor,
+                                    co.vapid,
+                                    keyManager
+                                ).filter {
+                                    it.distributor == distrib
+                                }.forEach { co ->
+                                    UnifiedPush.register(context, co)
+                                }
                             }
+                        }
                     } catch (_: DBStore.CyclicFallbackException) {
                         null
                     }

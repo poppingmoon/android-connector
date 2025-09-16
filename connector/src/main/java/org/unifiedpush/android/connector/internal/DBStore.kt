@@ -168,11 +168,14 @@ internal class DBStore(context: Context) :
          *
          * Does nothing if the distributor is already saved as a primary or fallback distrib
          *
-         * @return a set of removed [Connection.Token], so it is possible to send UNREGISTER to them
+         * @return `(new, toDel)`:
+         *   * `new`: whether this is a new distributor
+         *   * `toDel` is a set of removed [Connection.Token], so it is possible to send
+         *   UNREGISTER to them
          *
          * @throws [CyclicFallbackException] if [from] is already a fallback of [to]
          */
-        fun setFallback(from: String, to: String): Set<Connection.Token> {
+        fun setFallback(from: String, to: String): Pair<Boolean, Set<Connection.Token>> {
             /**
              *  With this chain D1 -> D2 -> D3
              *  setFallback(D3, D2) => must be ignored to avoid cyclic fallback chain
@@ -180,6 +183,7 @@ internal class DBStore(context: Context) :
              */
             val db = writableDatabase
             var fallbacks = emptySet<Connection.Token>()
+            var toExists = false
             db.runTransaction {
                 var selection = "$FIELD_DISTRIBUTOR = ?"
                 var selectionArgs = arrayOf(to)
@@ -212,7 +216,7 @@ internal class DBStore(context: Context) :
                     return@runTransaction
                 }
 
-                val toExists = db.query(
+                toExists = db.query(
                     TABLE_DISTRIBUTORS,
                     projection,
                     selection,
@@ -273,7 +277,7 @@ internal class DBStore(context: Context) :
                 fallbacks = getFallbackToChain(selection, selectionArgs)
                 db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
             }
-            return fallbacks
+            return Pair(!toExists, fallbacks)
         }
 
         /**

@@ -237,7 +237,7 @@ object UnifiedPush {
 
     @JvmStatic
     @Throws(VapidNotValidException::class)
-    private fun register(
+    internal fun register(
         context: Context,
         co: Connection.Registration,
     ) {
