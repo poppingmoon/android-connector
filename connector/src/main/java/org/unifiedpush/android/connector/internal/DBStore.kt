@@ -29,7 +29,6 @@ internal class DBStore(context: Context) :
         db.execSQL(CREATE_TABLE_TOKENS)
         db.execSQL(CREATE_TABLE_KEYS)
         // onUpgrade(db, 1, DB_VERSION)
-        //TODO: Migration from SharedPrefs
     }
 
     override fun onUpgrade(
