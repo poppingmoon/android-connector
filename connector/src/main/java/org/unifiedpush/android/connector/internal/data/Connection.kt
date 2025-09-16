@@ -9,7 +9,12 @@ internal sealed class Connection {
         val distributor: String,
         val token: String,
         val registration: RegistrationData
-    )
+    ) {
+        fun coToken(): Token = Token(
+            distributor,
+            token
+        )
+    }
     data class Instance(
         val distributor: String,
         val instance: String

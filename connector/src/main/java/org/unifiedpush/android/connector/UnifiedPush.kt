@@ -225,18 +225,14 @@ object UnifiedPush {
         keyManager: KeyManager,
     ) {
         val store = DBStore.get(context)
-        val distributor = store.distributor.get() ?: return
-        //TODO SEND to all distributors
-        register(
-            context,
-            store.registrations.set(
-                instance,
-                messageForDistributor,
-                vapid?.replace("=", ""),
-                distributor.packageName,
-                keyManager
-            )
-        )
+        store.registrations.set(
+            instance,
+            messageForDistributor,
+            vapid?.replace("=", ""),
+            keyManager
+        ).forEach { co ->
+            register(context, co)
+        }
     }
 
     @JvmStatic

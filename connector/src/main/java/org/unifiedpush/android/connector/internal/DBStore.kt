@@ -70,9 +70,8 @@ internal class DBStore(context: Context) :
                 co.registration.instance,
                 co.registration.messageForDistributor,
                 co.registration.vapid,
-                co.distributor,
                 null,
-                co.token
+                setOf(co.coToken())
             )
             store.migrateWebPushKeysRecord(co.registration.instance) { rec ->
                 keys.set(rec)
@@ -517,17 +516,19 @@ internal class DBStore(context: Context) :
         /**
          * Set or update [instance]
          *
-         * @param keyManager shoud not be null except in rare case (migration)
-         * @param token should stay null except in rare case (migration)
+         * @param keyManager should not be null except in rare case (migration)
+         * @param overrideTokens should stay empty except in rare case (migration)
+         *
+         * @return a set of [Connection.Registration] with the existing or created tokens for all
+         * distributors (primary/fallbacks)
          */
         fun set(
             instance: String,
             messageForDistributor: String?,
             vapid: String?,
-            distributor: String,
             keyManager: KeyManager?,
-            token: String? = null,
-        ): Connection.Registration {
+            overrideTokens: Set<Connection.Token> = emptySet(),
+        ): Set<Connection.Registration> {
             val db = writableDatabase
             return db.runTransaction {
                 val values = ContentValues().apply {
@@ -535,6 +536,9 @@ internal class DBStore(context: Context) :
                     putNullable(FIELD_MESSAGE, messageForDistributor)
                     putNullable(FIELD_VAPID, vapid)
                 }
+                val tokens = registrations.listToken(instance, db).associate {
+                    it.distributor to it.token
+                }.toMutableMap()
                 // If the registration with this instance already exists,
                 // we replace the record:
                 // the connection token is removed from TABLE_REGISTRATIONS with the cascade,
@@ -548,15 +552,32 @@ internal class DBStore(context: Context) :
                 keyManager?.run {
                     if (!exists(instance)) generate(instance)
                 }
-                val token = token?.also {
-                    saveToken(instance, distributor, it, db)
-                } ?: getToken(instance, distributor, db)
-                ?: newToken(instance, distributor, db)
-                return@runTransaction Connection.Registration(
-                    distributor,
-                    token,
-                    RegistrationData(instance, messageForDistributor, vapid)
-                )
+
+                /**
+                 * If there are override tokens, used during migration from shared prefs
+                 */
+                overrideTokens.forEach { t ->
+                    if (tokens[t.distributor]?.equals(t.token) != true) {
+                        saveToken(instance, t.distributor, t.token, db)
+                        tokens[t.distributor] = t.token
+                    }
+                }
+
+                this@DBStore.distributor.list().filter { d ->
+                    tokens.keys.none { it == d.packageName }
+                }.forEach { d ->
+                    tokens[d.packageName] = newToken(instance, d.packageName, db)
+                }
+
+                val registration = RegistrationData(instance, messageForDistributor, vapid)
+
+                return@runTransaction tokens.map { t ->
+                    Connection.Registration(
+                        t.key,
+                        t.value,
+                        registration
+                    )
+                }.toSet()
             }
         }
 
