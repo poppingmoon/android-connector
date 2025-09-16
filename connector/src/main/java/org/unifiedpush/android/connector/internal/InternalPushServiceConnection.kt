@@ -82,6 +82,7 @@ internal object InternalPushServiceConnection {
         class Message(val message: PushMessage, val instance: String): Event()
         class RegistrationFailed(val reason: FailedReason, val instance: String): Event()
         class Unregistered(val instance: String): Event()
+        class TempUnavailable(val instance: String): Event()
 
         fun handle() {
             when (this) {
@@ -89,6 +90,7 @@ internal object InternalPushServiceConnection {
                 is NewEndpoint -> mService.onNewEndpoint(endpoint, instance)
                 is RegistrationFailed -> mService.onRegistrationFailed(reason, instance)
                 is Unregistered -> mService.onUnregistered(instance)
+                is TempUnavailable -> mService.onTempUnavailable(instance)
             }
         }
     }

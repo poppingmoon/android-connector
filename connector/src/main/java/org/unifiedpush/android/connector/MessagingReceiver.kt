@@ -36,6 +36,7 @@ import java.security.GeneralSecurityException
  *         <action android:name="org.unifiedpush.android.connector.UNREGISTERED"/>
  *         <action android:name="org.unifiedpush.android.connector.NEW_ENDPOINT"/>
  *         <action android:name="org.unifiedpush.android.connector.REGISTRATION_FAILED"/>
+ *         <action android:name="org.unifiedpush.android.connector.TEMP_UNAVAILABLE"/>
  *     </intent-filter>
  * </receiver>
  * ```
@@ -76,12 +77,29 @@ abstract class MessagingReceiver : BroadcastReceiver() {
     )
 
     /**
-     * This application is unregistered by the distributor from receiving push messages
+     * This registration is unregistered by the distributor and won't receive push messages anymore.
+     *
+     * The registration should be removed from the application server.
      */
     abstract fun onUnregistered(
         context: Context,
         instance: String,
     )
+
+    /**
+     * The distributor backend is temporary unavailable.
+     *
+     * A fallback solution can be implemented until the push server is back online.
+     * For example, it is possible to implement an internal connection to the application
+     * server or periodically fetch notifications to the application server.
+     * When the server is available again, [onNewEndpoint] is called.
+     *
+     * Does nothing by default
+     */
+    open fun onTempUnavailable(
+        context: Context,
+        instance: String,
+    ) {}
 
     /**
      * A new message is received. The message contains the decrypted content of the push message
@@ -126,13 +144,24 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                 Log.i(TAG, "Failed: $reason")
                 onRegistrationFailed(context, reason, co.instance)
             }
+            ACTION_TEMP_UNAVAILABLE -> {
+                intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
+                    try {
+                        store.distributor.setFallback(co.distributor, distrib)
+                            .forEach { co ->
+                                // Broadcast UNREGISTER to potentially removed fallbacks
+                                UnifiedPush.broadcastUnregister(context, co)
+                            }
+                    } catch (_: DBStore.CyclicFallbackException) {
+                        null
+                    }
+                } ?: run {
+                    onTempUnavailable(context, co.instance)
+                }
+            }
             ACTION_UNREGISTERED -> {
                 intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
-                    if (intent.getBooleanExtra(EXTRA_TEMP, false)) {
-                        store.distributor.setFallback(co.distributor, distrib)
-                    } else {
-                        store.distributor.setPrimary(distrib)
-                    }.forEach { co ->
+                    store.distributor.setPrimary(distrib).forEach { co ->
                         // Broadcast UNREGISTER to potentially removed fallbacks
                         UnifiedPush.broadcastUnregister(context, co)
                     }

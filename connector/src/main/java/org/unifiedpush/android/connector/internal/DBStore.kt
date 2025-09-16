@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.util.AndroidException
 import android.util.Log
 import org.unifiedpush.android.connector.TAG
 import org.unifiedpush.android.connector.internal.data.Distributor
@@ -152,7 +153,7 @@ internal class DBStore(context: Context) :
 
                 // 2. Remove the previous primary distrib and its fallbacks (with the cascade)
                 selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM is NULL"
-                fallbacks = getFallbacksOf(selection, selectionArgs)
+                fallbacks = getFallbackToChain(selection, selectionArgs)
                 db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
             }
             return fallbacks
@@ -168,28 +169,54 @@ internal class DBStore(context: Context) :
          * Does nothing if the distributor is already saved as a primary or fallback distrib
          *
          * @return a set of removed [Connection.Token], so it is possible to send UNREGISTER to them
+         *
+         * @throws [CyclicFallbackException] if [from] is already a fallback of [to]
          */
         fun setFallback(from: String, to: String): Set<Connection.Token> {
             /**
-             * We used to do that, but this isn't necessary anymore
-             * ```
-             *         if (store.tryGetDistributor() != distributor) {
-             *             store.distributorAck = false
-             *             store.saveDistributor(distributor)
-             *         }
-             * ```
+             *  With this chain D1 -> D2 -> D3
+             *  setFallback(D3, D2) => must be ignored to avoid cyclic fallback chain
+             *  setFallback(D1, D3) => OK
              */
             val db = writableDatabase
             var fallbacks = emptySet<Connection.Token>()
             db.runTransaction {
-                val projection = arrayOf(FIELD_FALLBACK_FROM)
                 var selection = "$FIELD_DISTRIBUTOR = ?"
                 var selectionArgs = arrayOf(to)
-                val exists = db.query(
+
+                // We ignore the fallback if `to` already fallback on `from`, to avoid cyclic fallback
+                if (getFallbackToChain(
+                        selection,
+                        selectionArgs,
+                        db
+                    ).any { it.distributor == from }) {
+                    throw CyclicFallbackException()
+                }
+
+
+                val projection = arrayOf(FIELD_FALLBACK_FROM)
+                val fromExists = db.query(
                     TABLE_DISTRIBUTORS,
                     projection,
                     selection,
-                    selectionArgs,
+                    arrayOf(from),
+                    null,
+                    null,
+                    null
+                ).use {
+                    it.moveToFirst()
+                }
+
+                if (!fromExists) {
+                    // We abort, this should not be called with this from
+                    return@runTransaction
+                }
+
+                val toExists = db.query(
+                    TABLE_DISTRIBUTORS,
+                    projection,
+                    selection,
+                    arrayOf(to),
                     null,
                     null,
                     null
@@ -198,7 +225,21 @@ internal class DBStore(context: Context) :
                 }
 
                 // We ignore the fallback if we already rely on it, to avoid cyclic fallback
-                if (!exists) {
+                if (toExists) {
+                    // 1.A. Change `to.fallback_from`
+                    selection = "$FIELD_DISTRIBUTOR = ?"
+                    selectionArgs = arrayOf(to)
+                    val values = ContentValues().apply {
+                        put(FIELD_FALLBACK_FROM, from)
+                    }
+                    db.update(
+                        TABLE_DISTRIBUTORS,
+                        values,
+                        selection,
+                        selectionArgs
+                    )
+                } else {
+                    // 1.B. Add `to`
                     val values = ContentValues().apply {
                         put(FIELD_DISTRIBUTOR, to)
                         put(FIELD_ACK, 0)
@@ -211,14 +252,26 @@ internal class DBStore(context: Context) :
                         values,
                         SQLiteDatabase.CONFLICT_REPLACE
                     )
-
-                    // 2. Remove the previous distrib that was falling back from the same from
-                    // and its fallbacks (with the cascade)
-                    selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM = ?"
-                    selectionArgs = arrayOf(to, from)
-                    fallbacks = getFallbacksOf(selection, selectionArgs)
-                    db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
                 }
+                // 2. Change `from.fallback_to`
+                selection = "$FIELD_DISTRIBUTOR = ?"
+                selectionArgs = arrayOf(from)
+                val values = ContentValues().apply {
+                    put(FIELD_FALLBACK_TO, to)
+                }
+                db.update(
+                    TABLE_DISTRIBUTORS,
+                    values,
+                    selection,
+                    selectionArgs
+                )
+
+                // 3. Remove the previous distrib that was falling back from the same from
+                // and its fallbacks (with the cascade)
+                selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM = ?"
+                selectionArgs = arrayOf(to, from)
+                fallbacks = getFallbackToChain(selection, selectionArgs)
+                db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
             }
             return fallbacks
         }
@@ -266,7 +319,7 @@ internal class DBStore(context: Context) :
                 db.update(TABLE_DISTRIBUTORS, values, selection, selectionArgs)
 
                 // 2. get list of fallbacks connections
-                fallbacks = getFallbacksOf(selection, selectionArgs, db)
+                fallbacks = getFallbackToChain(selection, selectionArgs, db)
 
                 // 3. Delete fallbacks
                 //     - the cascade will delete next fallbacks, and associated tokens
@@ -279,11 +332,11 @@ internal class DBStore(context: Context) :
         }
 
         /**
-         * get fallbacks from [originSelection]
+         * Get all `fallback_to` from [originSelection]
          *
          * @return a set of [Connection.Token] for the fallback connections
          */
-        fun getFallbacksOf(
+        fun getFallbackToChain(
             originSelection: String,
             originSelectionArgs: Array<String>,
             db: SQLiteDatabase = writableDatabase
@@ -787,6 +840,13 @@ internal class DBStore(context: Context) :
             endTransaction()
         }
     }
+
+    /**
+     * Trying to set a cyclic fallback chain
+     *
+     * Distributor D1 fallbacks to D2 and D2 tries to fallback to D1
+     */
+    class CyclicFallbackException: AndroidException()
 
     companion object {
         private var instance: DBStore? = null
