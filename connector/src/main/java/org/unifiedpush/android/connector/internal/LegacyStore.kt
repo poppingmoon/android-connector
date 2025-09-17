@@ -20,7 +20,7 @@ internal class LegacyStore(context: Context) {
         val packageName = preferences.getString(PREF_MASTER_DISTRIBUTOR, null)
         val ack = preferences.getBoolean(PREF_MASTER_DISTRIBUTOR_ACK, false)
         if (packageName == null ||
-            block(Distributor(packageName, ack, null, null))
+            block(Distributor(packageName, ack))
             ) {
             preferences
                 .edit()

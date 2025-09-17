@@ -171,6 +171,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                                 }
                             }
                         }
+                        true
                     } catch (_: DBStore.CyclicFallbackException) {
                         null
                     }
