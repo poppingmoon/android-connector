@@ -644,10 +644,12 @@ internal class DBStore(context: Context) :
                     }
                 }
 
-                this@DBStore.distributor.list().filter { d ->
-                    tokens.keys.none { it == d.packageName }
-                }.forEach { d ->
-                    tokens[d.packageName] = newToken(instance, d.packageName, db)
+                this@DBStore.distributor.list().forEach { d ->
+                    tokens[d.packageName]?.let { t ->
+                        saveToken(instance, d.packageName, t, db)
+                    } ?: run {
+                        tokens[d.packageName] = newToken(instance, d.packageName, db)
+                    }
                 }
 
                 val registration = RegistrationData(instance, messageForDistributor, vapid)
