@@ -302,6 +302,7 @@ internal class DBStore(context: Context) :
                 null,
                 null
             ).use {
+                it.moveToFirst() || return@use null
                 it.distributor()
             }
         }
@@ -463,7 +464,6 @@ internal class DBStore(context: Context) :
          * Get [Distributor] from a query cursor
          */
         private fun Cursor.distributor(): Distributor? {
-            moveToFirst() || return null
             val distribColumn = getColumnIndex(FIELD_DISTRIBUTOR)
             val ackColumn = getColumnIndex(FIELD_ACK)
 
