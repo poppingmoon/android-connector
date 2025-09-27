@@ -516,7 +516,7 @@ internal class DBStore(context: Context) :
          *
          * @return the potentially updated value of the token
          */
-        fun newToken(
+        private fun newToken(
             instance: String,
             distributor: String,
             db: SQLiteDatabase = writableDatabase
@@ -775,8 +775,8 @@ internal class DBStore(context: Context) :
                         if (it.moveToNext()) it else null
                     }.map { r ->
                         Connection.Token(
-                            it.getString(distribCol),
-                            it.getString(tokenCol)
+                            r.getString(distribCol),
+                            r.getString(tokenCol)
                         )
                     }.toSet()
                 } else {
