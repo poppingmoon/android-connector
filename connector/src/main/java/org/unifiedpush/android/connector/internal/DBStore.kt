@@ -372,12 +372,12 @@ internal class DBStore(context: Context) :
             db: SQLiteDatabase = writableDatabase
         ) : Set<Connection.Token> {
             val query =
-                "WITH RECURSIVE rec(origin, $FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO) AS (" +
-                        "SELECT 1, $FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO" +
+                "WITH RECURSIVE rec($FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO) AS (" +
+                        "SELECT $FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO" +
                         " FROM $TABLE_DISTRIBUTORS" +
                         " WHERE %s".format(originSelection) +
                         " UNION ALL" +
-                        " SELECT 0, t.$FIELD_DISTRIBUTOR, t.$FIELD_FALLBACK_TO" +
+                        " SELECT t.$FIELD_DISTRIBUTOR, t.$FIELD_FALLBACK_TO" +
                         " FROM $TABLE_DISTRIBUTORS t" +
                         " JOIN rec ON t.$FIELD_DISTRIBUTOR = rec.$FIELD_FALLBACK_TO" +
                         "   AND t.$FIELD_FALLBACK_FROM = rec.$FIELD_DISTRIBUTOR" +
@@ -385,8 +385,7 @@ internal class DBStore(context: Context) :
                         " SELECT rec.$FIELD_DISTRIBUTOR, t.$FIELD_CONNECTOR_TOKEN" +
                         " FROM rec" +
                         " INNER JOIN $TABLE_TOKENS t" +
-                        " ON rec.$FIELD_DISTRIBUTOR = t.$FIELD_DISTRIBUTOR" +
-                        " WHERE origin = 0"
+                        " ON rec.$FIELD_DISTRIBUTOR = t.$FIELD_DISTRIBUTOR"
             return db.rawQuery(query, originSelectionArgs)
                 .use {
                     val distribColumn = it.getColumnIndex(FIELD_DISTRIBUTOR)
