@@ -338,6 +338,7 @@ internal class DBStore(context: Context) :
                 db.update(TABLE_DISTRIBUTORS, values, selection, selectionArgs)
 
                 // 2. get list of fallbacks connections
+                selection = "$FIELD_FALLBACK_FROM = ?"
                 fallbacks = getFallbackToChain(selection, selectionArgs, db)
 
                 // 3. Delete fallbacks
