@@ -144,8 +144,8 @@ internal class DBStore(context: Context) :
                     val values = ContentValues().apply {
                         put(FIELD_DISTRIBUTOR, distributor)
                         put(FIELD_ACK, 0)
+                        put(FIELD_DATE_INSERTION, System.currentTimeMillis())
                         putNull(FIELD_FALLBACK_FROM)
-                        putNull(FIELD_FALLBACK_TO)
                     }
                     db.insertWithOnConflict(
                         TABLE_DISTRIBUTORS,
@@ -232,7 +232,7 @@ internal class DBStore(context: Context) :
                     it.moveToFirst()
                 }
 
-                // We ignore the fallback if we already rely on it, to avoid cyclic fallback
+                // If to exists, we change its from
                 if (toExists) {
                     // 1.A. Change `to.fallback_from`
                     selection = "$FIELD_DISTRIBUTOR = ?"
@@ -251,8 +251,8 @@ internal class DBStore(context: Context) :
                     val values = ContentValues().apply {
                         put(FIELD_DISTRIBUTOR, to)
                         put(FIELD_ACK, 0)
+                        put(FIELD_DATE_INSERTION, System.currentTimeMillis())
                         put(FIELD_FALLBACK_FROM, from)
-                        putNull(FIELD_FALLBACK_TO)
                     }
                     db.insertWithOnConflict(
                         TABLE_DISTRIBUTORS,
@@ -261,20 +261,8 @@ internal class DBStore(context: Context) :
                         SQLiteDatabase.CONFLICT_REPLACE
                     )
                 }
-                // 2. Change `from.fallback_to`
-                selection = "$FIELD_DISTRIBUTOR = ?"
-                selectionArgs = arrayOf(from)
-                val values = ContentValues().apply {
-                    put(FIELD_FALLBACK_TO, to)
-                }
-                db.update(
-                    TABLE_DISTRIBUTORS,
-                    values,
-                    selection,
-                    selectionArgs
-                )
 
-                // 3. Remove the previous distrib that was falling back from the same from
+                // 2. Remove the previous distrib that was falling back from the same from
                 // and its fallbacks (with the cascade)
                 selection = "$FIELD_DISTRIBUTOR != ? AND $FIELD_FALLBACK_FROM = ?"
                 selectionArgs = arrayOf(to, from)
@@ -292,15 +280,16 @@ internal class DBStore(context: Context) :
             val db = readableDatabase
             // We need all columns
             val projection = null
-            val selection = "$FIELD_FALLBACK_TO IS NULL"
+            val orderBy = "$FIELD_DATE_INSERTION DESC"
             return db.query(
                 TABLE_DISTRIBUTORS,
                 projection,
-                selection,
                 null,
                 null,
                 null,
-                null
+                null,
+                orderBy,
+                "1"
             ).use {
                 it.moveToFirst() || return@use null
                 it.distributor()
@@ -372,15 +361,14 @@ internal class DBStore(context: Context) :
             db: SQLiteDatabase = writableDatabase
         ) : Set<Connection.Token> {
             val query =
-                "WITH RECURSIVE rec($FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO) AS (" +
-                        "SELECT $FIELD_DISTRIBUTOR, $FIELD_FALLBACK_TO" +
+                "WITH RECURSIVE rec($FIELD_DISTRIBUTOR) AS (" +
+                        "SELECT $FIELD_DISTRIBUTOR" +
                         " FROM $TABLE_DISTRIBUTORS" +
                         " WHERE %s".format(originSelection) +
                         " UNION ALL" +
-                        " SELECT t.$FIELD_DISTRIBUTOR, t.$FIELD_FALLBACK_TO" +
+                        " SELECT t.$FIELD_DISTRIBUTOR" +
                         " FROM $TABLE_DISTRIBUTORS t" +
-                        " JOIN rec ON t.$FIELD_DISTRIBUTOR = rec.$FIELD_FALLBACK_TO" +
-                        "   AND t.$FIELD_FALLBACK_FROM = rec.$FIELD_DISTRIBUTOR" +
+                        " JOIN rec ON t.$FIELD_FALLBACK_FROM = rec.$FIELD_DISTRIBUTOR" +
                         ") " +
                         " SELECT rec.$FIELD_DISTRIBUTOR, t.$FIELD_CONNECTOR_TOKEN" +
                         " FROM rec" +
@@ -417,26 +405,17 @@ internal class DBStore(context: Context) :
         fun remove(distributor: String) {
             val db = writableDatabase
             db.runTransaction {
-                // 1. change fallback_to of the previous distrib
-                var query = "UPDATE $TABLE_DISTRIBUTORS" +
-                        " SET $FIELD_FALLBACK_TO = (" +
-                        "   SELECT $FIELD_FALLBACK_TO" +
-                        "   FROM $TABLE_DISTRIBUTORS" +
-                        "   WHERE $FIELD_DISTRIBUTOR = ?" +
-                        ")" +
-                        " WHERE $FIELD_FALLBACK_TO = ?"
-                var selectionArgs = arrayOf(distributor, distributor)
-                // 2. change fallback_from of the next distrib
-                db.rawQuery(query, selectionArgs).close()
-                query = "UPDATE $TABLE_DISTRIBUTORS" +
+                // 1. change fallback_from of the next distrib
+                val query = "UPDATE $TABLE_DISTRIBUTORS" +
                         " SET $FIELD_FALLBACK_FROM = (" +
                         "   SELECT $FIELD_FALLBACK_FROM" +
                         "   FROM $TABLE_DISTRIBUTORS" +
                         "   WHERE $FIELD_DISTRIBUTOR = ?" +
                         ")" +
                         " WHERE $FIELD_FALLBACK_FROM = ?"
+                var selectionArgs = arrayOf(distributor, distributor)
                 db.execSQL(query, selectionArgs)
-                // 3. delete distributor
+                // 2. delete distributor
                 val selection = "$FIELD_DISTRIBUTOR = ?"
                 selectionArgs = arrayOf(distributor)
                 db.delete(TABLE_DISTRIBUTORS, selection, selectionArgs)
@@ -446,8 +425,7 @@ internal class DBStore(context: Context) :
         /**
          * List all distributors
          */
-        fun list(): Set<Distributor> {
-            val db = readableDatabase
+        fun list(db: SQLiteDatabase = readableDatabase): Set<Distributor> {
             return db.query(TABLE_DISTRIBUTORS, null, null, null, null, null, null)
                 .use {
                     generateSequence {
@@ -895,15 +873,15 @@ internal class DBStore(context: Context) :
          * distributors:
          * - [FIELD_DISTRIBUTOR] String, key
          * - [FIELD_FALLBACK_FROM] String, ref distributor, on delete=cascade
-         * - [FIELD_FALLBACK_TO] String, ref distributor, on delete=set null
          * - [FIELD_ACK] Boolean
+         * - [FIELD_DATE_INSERTION] Datetime, the distrib is used is _always_ the last inserted
          */
         private const val TABLE_DISTRIBUTORS = "distributors"
         private const val FIELD_DISTRIBUTOR = "distributor"
 
         private const val FIELD_FALLBACK_FROM = "fallback_from"
-        private const val FIELD_FALLBACK_TO = "fallback_to"
         private const val FIELD_ACK = "ack"
+        private const val FIELD_DATE_INSERTION = "date_insertion"
 
         /**
          * registrations
@@ -945,12 +923,10 @@ internal class DBStore(context: Context) :
         private const val CREATE_TABLE_DISTRIBUTORS = "CREATE TABLE $TABLE_DISTRIBUTORS (" +
                 "$FIELD_DISTRIBUTOR TEXT PRIMARY KEY," +
                 "$FIELD_FALLBACK_FROM TEXT," +
-                "$FIELD_FALLBACK_TO TEXT," +
                 "$FIELD_ACK INTEGER," +
+                "$FIELD_DATE_INSERTION INTEGER," +
                 "FOREIGN KEY ($FIELD_FALLBACK_FROM)" +
-                    " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE," +
-                "FOREIGN KEY ($FIELD_FALLBACK_TO)" +
-                    " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE SET NULL" +
+                    " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE" +
                 ");"
 
         /**
