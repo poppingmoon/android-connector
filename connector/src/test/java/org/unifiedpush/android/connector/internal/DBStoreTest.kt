@@ -8,6 +8,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RuntimeEnvironment
+import org.unifiedpush.android.connector.internal.data.Connection
 
 @RunWith(AndroidJUnit4::class)
 class DBStoreTest {
@@ -21,12 +22,14 @@ class DBStoreTest {
     }
 
     @Test
-    fun primaryDistrib() {
+    fun primaryDistribNoRegistration() {
         assertNoDistrib()
         db.distributor.setPrimary(DISTRIB_1)
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_1, false)
-        db.distributor.ack(DISTRIB_1)
+        assertContainsOnlyCoTokenFor(listOf()) {
+            db.distributor.ack(DISTRIB_1)
+        }
         assertDistrib(DISTRIB_1, true)
         db.distributor.remove(DISTRIB_1)
         assertNoDistrib()
@@ -42,10 +45,11 @@ class DBStoreTest {
         assertNoDistrib()
         setD1()
         // Replace
-        assertContainsOnlyTokenFor(listOf(DISTRIB_1)) {
-            val res = db.distributor.setPrimary(DISTRIB_2)
-            assert(res.first)
-            res.second.map { it.token }
+        assertContainsOnlyCoTokenFor(listOf(DISTRIB_1)) {
+            db.distributor.setPrimary(DISTRIB_2).let {
+                assert(it.first)
+                it.second
+            }
         }
         assertPrimary(DISTRIB_2)
         assertDistrib(DISTRIB_2, false)
@@ -67,12 +71,15 @@ class DBStoreTest {
     fun replaceSamePrimaryDistrib() {
         assertNoDistrib()
         setD1()
-        db.distributor.ack(DISTRIB_1)
+        assertContainsOnlyCoTokenFor(listOf()) {
+            db.distributor.ack(DISTRIB_1)
+        }
         // Replace
-        assertContainsOnlyTokenFor(listOf()) {
-            val res = db.distributor.setPrimary(DISTRIB_1)
-            assert(!res.first)
-            res.second.map { it.token }
+        assertContainsOnlyCoTokenFor(listOf()) {
+            db.distributor.setPrimary(DISTRIB_1).let {
+                assert(!it.first)
+                it.second
+            }
         }
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_1, true)
@@ -91,10 +98,11 @@ class DBStoreTest {
         setD1D2()
 
         // Replace
-        assertContainsOnlyTokenFor(listOf(DISTRIB_1, DISTRIB_2)) {
-            val res = db.distributor.setPrimary(DISTRIB_3)
-            assert(res.first)
-            res.second.map { it.token }
+        assertContainsOnlyCoTokenFor(listOf(DISTRIB_1, DISTRIB_2)) {
+            db.distributor.setPrimary(DISTRIB_3).let {
+                assert(it.first)
+                it.second
+            }
         }
         assertPrimary(DISTRIB_3)
         assertDistrib(DISTRIB_3, false)
@@ -118,7 +126,12 @@ class DBStoreTest {
         setD1D2D3()
 
         // Replace
-        db.distributor.setPrimary(DISTRIB_2)
+        assertContainsOnlyCoTokenFor(listOf(DISTRIB_1)) {
+            db.distributor.setPrimary(DISTRIB_2).let {
+                assert(!it.first)
+                it.second
+            }
+        }
         assertPrimary(DISTRIB_2)
         assertDistrib(DISTRIB_3, true)
         assertKnowOnlyDistribs(listOf(DISTRIB_2, DISTRIB_3))
@@ -144,18 +157,28 @@ class DBStoreTest {
         setD1D2D3()
 
         // Ack fallback, should remove the 2nd but not primary
-        db.distributor.ack(DISTRIB_2)
+        assertContainsOnlyCoTokenFor(listOf(DISTRIB_3)) {
+            db.distributor.ack(DISTRIB_2)
+        }
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_2, true)
         assertKnowOnlyDistribs(listOf(DISTRIB_1, DISTRIB_2))
 
         // Add again DISTRIB_3 to test ack primary
-        db.distributor.setFallback(DISTRIB_2, DISTRIB_3)
+        assertContainsOnlyCoTokenFor(listOf()) {
+            db.distributor.setFallback(DISTRIB_2, DISTRIB_3).let {
+                assert(it.first)
+                it.second
+            }
+        }
+        addRegistration()
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_3, false)
 
         // Now Ack primary, should remove the 2 fallbacks
-        db.distributor.ack(DISTRIB_1)
+        assertContainsOnlyCoTokenFor(listOf(DISTRIB_2, DISTRIB_3)) {
+            db.distributor.ack(DISTRIB_1)
+        }
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_1, true)
         assertKnowOnlyDistribs(listOf(DISTRIB_1))
@@ -174,7 +197,12 @@ class DBStoreTest {
         assertNoDistrib()
         setD1D2D3()
 
-        db.distributor.setFallback(DISTRIB_1, DISTRIB_3)
+        assertContainsOnlyCoTokenFor(listOf(DISTRIB_2)) {
+            db.distributor.setFallback(DISTRIB_1, DISTRIB_3).let {
+                assert(!it.first)
+                it.second
+            }
+        }
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_3, true)
         assertKnowOnlyDistribs(listOf(DISTRIB_1, DISTRIB_3))
@@ -242,7 +270,7 @@ class DBStoreTest {
         assertDistrib(DISTRIB_2, true)
     }
 
-    fun addRegistration() {
+    private fun addRegistration() {
         db.registrations.set(
             REGISTRATION_INSTANCE,
             REGISTRATION_MESSAGE,
@@ -254,7 +282,7 @@ class DBStoreTest {
     /**
      * Initial: D1 (ack: false)
      */
-    fun setD1() {
+    private fun setD1() {
         // Create primary
         db.distributor.setPrimary(DISTRIB_1)
         assertPrimary(DISTRIB_1)
@@ -267,14 +295,16 @@ class DBStoreTest {
     /**
      * Initial: D1 (ack: false) -> D2 (ack: true)
      */
-    fun setD1D2() {
+    private fun setD1D2() {
         setD1()
         // Set fallback
         db.distributor.setFallback(DISTRIB_1, DISTRIB_2)
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_2, false)
         // Ack fallback distrib
-        db.distributor.ack(DISTRIB_2)
+        assertContainsOnlyCoTokenFor(listOf()) {
+            db.distributor.ack(DISTRIB_2)
+        }
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_2, true)
         assertKnowOnlyDistribs(listOf(DISTRIB_1, DISTRIB_2))
@@ -287,11 +317,13 @@ class DBStoreTest {
     /**
      * Initial: D1 (ack: false) -> D2 (ack: true) -> D3 (ack: true)
      */
-    fun setD1D2D3() {
+    private fun setD1D2D3() {
         setD1D2()
         // Set 2nd fallback
         db.distributor.setFallback(DISTRIB_2, DISTRIB_3)
-        db.distributor.ack(DISTRIB_3)
+        assertContainsOnlyCoTokenFor(listOf()) {
+            db.distributor.ack(DISTRIB_3)
+        }
         assertPrimary(DISTRIB_1)
         assertDistrib(DISTRIB_3, true)
         assertKnowOnlyDistribs(listOf(DISTRIB_1, DISTRIB_2, DISTRIB_3))
@@ -301,25 +333,25 @@ class DBStoreTest {
         assert(db.registrations.getToken(REGISTRATION_INSTANCE, DISTRIB_3) != null)
     }
 
-    fun assertPrimary(distrib: String) {
+    private fun assertPrimary(distrib: String) {
         assert(db.distributor.isPrimary(distrib))
-        distribs
+        allDistribs
             .filter { it != distrib }
             .forEach { d ->
             assert(!db.distributor.isPrimary(d))
         }
     }
 
-    fun assertDistrib(packageName: String, ack: Boolean) {
+    private fun assertDistrib(packageName: String, ack: Boolean) {
         assertEquals(packageName, db.distributor.get()?.packageName)
         assertEquals(ack, db.distributor.get()?.ack)
     }
 
-    fun assertNoDistrib() {
+    private fun assertNoDistrib() {
         assertEquals(null, db.distributor.get())
     }
 
-    fun assertKnowOnlyDistribs(distribs: List<String>) {
+    private fun assertKnowOnlyDistribs(distribs: List<String>) {
         val list = db.distributor.list().map { it.packageName }
         val unknownList = distribs.toMutableSet()
         distribs.forEach { d ->
@@ -332,27 +364,16 @@ class DBStoreTest {
     }
 
     /**
-     * @param block returns a set of tokens
+     * @param block returns a set of [Connection.Token]
      */
-    fun assertContainsOnlyTokenFor(distribs: List<String>, block: () -> List<String>) {
-        val unknownList = distribs.toMutableSet()
-        val tokens = distribs.map { d ->
-            unknownList.remove(d)
-            db.registrations.getToken(REGISTRATION_INSTANCE, d)
-        }
-        val potRemovedTokens = unknownList.mapNotNull { d ->
-            db.registrations.getToken(REGISTRATION_INSTANCE, d)
-        }
-        val res = block()
-        tokens.forEach {
-            assert(it != null)
-            assert(res.contains(it)) { "$it not in $res" }
-        }
-        potRemovedTokens.forEach {
-            assert(!res.contains(it))
+    private fun assertContainsOnlyCoTokenFor(distribs: List<String>, block: () -> Set<Connection.Token>) {
+        val unknownList = allDistribs.filter { it !in distribs }
+        val res = block().toMutableList()
+        distribs.forEach { d ->
+            assert(res.map{ it.distributor }.contains(d)) { "$d not in $res" }
         }
         unknownList.forEach { d ->
-            assertEquals(null, db.registrations.getToken(REGISTRATION_INSTANCE, d))
+            assert(!res.map{ it.distributor }.contains(d)) { "$d in $res" }
         }
     }
 
@@ -369,7 +390,7 @@ class DBStoreTest {
         const val REGISTRATION_INSTANCE = "instance_"
         const val REGISTRATION_MESSAGE = "message_"
         const val REGISTRATION_VAPID = "BA1Hxzyi1RUM1b5wjxsn7nGxAszw2u61m164i3MrAIxHF6YK5h4SDYic-dRuU_RCPCfA5aq9ojSwk5Y2EmClBPs"
-        val distribs = setOf(
+        val allDistribs = setOf(
             DISTRIB_1, DISTRIB_2, DISTRIB_3
         )
     }
