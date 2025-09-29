@@ -435,7 +435,7 @@ internal class DBStore(context: Context) :
                         "   WHERE $FIELD_DISTRIBUTOR = ?" +
                         ")" +
                         " WHERE $FIELD_FALLBACK_FROM = ?"
-                db.rawQuery(query, selectionArgs).close()
+                db.execSQL(query, selectionArgs)
                 // 3. delete distributor
                 val selection = "$FIELD_DISTRIBUTOR = ?"
                 selectionArgs = arrayOf(distributor)
