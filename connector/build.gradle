@@ -19,7 +19,9 @@ android {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_1_8)
             // languageVersion provides source compatibility with the specified version of Kotlin
-            languageVersion.set(KotlinVersion.KOTLIN_1_8)
+            // By default it uses $kotlinVersion (2.2)
+            // We set it to the lowest non-deprecated value
+            languageVersion.set(KotlinVersion.KOTLIN_2_0)
         }
     }
 
