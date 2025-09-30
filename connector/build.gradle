@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
+
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
@@ -12,10 +15,12 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    kotlinOptions {
-        jvmTarget = '1.8'
-        // languageVersion provides source compatibility with the specified version of Kotlin
-        languageVersion = '1.8'
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_1_8)
+            // languageVersion provides source compatibility with the specified version of Kotlin
+            languageVersion.set(KotlinVersion.KOTLIN_1_8)
+        }
     }
 
     defaultConfig {
