@@ -7,6 +7,7 @@ package org.unifiedpush.android.connector
 
 internal const val ACTION_NEW_ENDPOINT = "org.unifiedpush.android.connector.NEW_ENDPOINT"
 internal const val ACTION_REGISTRATION_FAILED = "org.unifiedpush.android.connector.REGISTRATION_FAILED"
+internal const val ACTION_TEMP_UNAVAILABLE = "org.unifiedpush.android.connector.TEMP_UNAVAILABLE"
 internal const val ACTION_UNREGISTERED = "org.unifiedpush.android.connector.UNREGISTERED"
 internal const val ACTION_MESSAGE = "org.unifiedpush.android.connector.MESSAGE"
 
@@ -24,6 +25,7 @@ internal const val EXTRA_REASON = "reason"
 internal const val EXTRA_VAPID = "vapid"
 internal const val EXTRA_BYTES_MESSAGE = "bytesMessage"
 internal const val EXTRA_MESSAGE_ID = "id"
+internal const val EXTRA_NEW_DISTRIBUTOR = "newDistributor"
 
 internal const val WAKE_LOCK_TAG = "android-connector:lock"
 internal const val TAG = "UnifiedPush"

@@ -1,11 +1,10 @@
 package org.unifiedpush.android.connector.internal.data
 
 /**
- * Internal object for a [Registration]
+ * Internal object for a registration
  */
-internal data class Registration(
+internal data class RegistrationData(
     val instance: String,
-    val token: String,
     val messageForDistributor: String?,
     val vapid: String?,
 )

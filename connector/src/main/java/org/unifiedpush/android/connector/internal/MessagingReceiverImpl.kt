@@ -46,6 +46,13 @@ class MessagingReceiverImpl : MessagingReceiver() {
         )
     }
 
+    override fun onTempUnavailable(context: Context, instance: String) {
+        InternalPushServiceConnection.sendEvent(
+            context,
+            InternalPushServiceConnection.Event.TempUnavailable(instance)
+        )
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (shouldRun(context)) {
             super.onReceive(context, intent)

@@ -10,13 +10,9 @@ package org.unifiedpush.android.connector.internal.data
  * @param packageName is the packageName of the distributor
  * @param ack is true if we have received a new endpoint
  * after a registration
- * @param fallbackFrom is null if the distributor is the primary one
- * @param fallbackTo is null if the distributor is in use
  *
  */
 internal data class Distributor(
     val packageName: String,
     val ack: Boolean,
-    val fallbackFrom: String?,
-    val fallbackTo: String?
 )
