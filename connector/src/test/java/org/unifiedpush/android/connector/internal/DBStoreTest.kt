@@ -9,16 +9,20 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RuntimeEnvironment
 import org.unifiedpush.android.connector.internal.data.Connection
+import org.unifiedpush.android.connector.keys.DefaultKeyManager
+import org.unifiedpush.android.connector.keys.KeyManager
 
 @RunWith(AndroidJUnit4::class)
 class DBStoreTest {
 
     private lateinit var db: DBStore
+    private lateinit var keyManager: KeyManager
 
     @Before
     fun setup() {
         val context = RuntimeEnvironment.getApplication()
         db = DBStore(context)
+        keyManager = DefaultKeyManager(db.keys, legacy = true)
     }
 
     @Test
@@ -270,12 +274,27 @@ class DBStoreTest {
         assertDistrib(DISTRIB_2, true)
     }
 
+    /**
+     * Registering the same instance twice doesn't override the keys
+     */
+    @Test(timeout = 3000L)
+    fun testKeysReregistration() {
+        assertNoDistrib()
+        setD1()
+        val auth1 = db.keys.get(REGISTRATION_INSTANCE)?.auth
+        assert(auth1 != null) { "No keys found for instance" }
+        addRegistration()
+        val auth2 = db.keys.get(REGISTRATION_INSTANCE)?.auth
+        assert(auth2 != null) { "Keys has been removed" }
+        assertEquals(auth1, auth2)
+    }
+
     private fun addRegistration() {
         db.registrations.set(
             REGISTRATION_INSTANCE,
             REGISTRATION_MESSAGE,
             REGISTRATION_VAPID,
-            null
+            keyManager
         )
     }
 

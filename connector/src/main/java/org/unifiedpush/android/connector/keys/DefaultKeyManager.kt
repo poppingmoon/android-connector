@@ -3,13 +3,13 @@ package org.unifiedpush.android.connector.keys
 import android.content.Context
 import android.os.Build
 import com.google.crypto.tink.apps.fixed_webpush.WebPushHybridDecrypt
+import java.security.interfaces.ECPrivateKey
+import java.security.interfaces.ECPublicKey
 import org.unifiedpush.android.connector.data.PublicKeySet
 import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntries
 import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntries23
 import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntriesLegacy
-import java.security.interfaces.ECPrivateKey
-import java.security.interfaces.ECPublicKey
 
 /**
  * Default [KeyManager].
@@ -18,14 +18,13 @@ import java.security.interfaces.ECPublicKey
  * key in the Android Key Store.
  *
  * For SDK < 23, private keys are stored in plain text in shared preferences.
+ *
+ * [legacy] is used to force legacy store, for the tests
  */
-class DefaultKeyManager(context: Context) : KeyManager {
-    private val store = DBStore.get(context).keys
+class DefaultKeyManager internal constructor(private val store: DBStore.KeyStore, private val legacy: Boolean = false) : KeyManager {
+    constructor(context: Context) : this(store = DBStore.get(context).keys)
 
-    override fun decrypt(
-        instance: String,
-        sealed: ByteArray,
-    ): ByteArray? {
+    override fun decrypt(instance: String, sealed: ByteArray): ByteArray? {
         val keys = getKeyStoreEntries(instance).getWebPushKeys() ?: return null
         val hybridDecrypt =
             WebPushHybridDecrypt.Builder()
@@ -53,7 +52,7 @@ class DefaultKeyManager(context: Context) : KeyManager {
     }
 
     private fun getKeyStoreEntries(instance: String): WebPushKeysEntries {
-        return if (Build.VERSION.SDK_INT >= 23) {
+        return if (!legacy && Build.VERSION.SDK_INT >= 23) {
             WebPushKeysEntries23(instance, store)
         } else {
             WebPushKeysEntriesLegacy(instance, store)

@@ -8,16 +8,15 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.AndroidException
 import android.util.Log
+import java.util.UUID
 import org.unifiedpush.android.connector.TAG
+import org.unifiedpush.android.connector.internal.data.Connection
 import org.unifiedpush.android.connector.internal.data.Distributor
 import org.unifiedpush.android.connector.internal.data.RegistrationData
 import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
-import org.unifiedpush.android.connector.internal.data.Connection
 import org.unifiedpush.android.connector.keys.KeyManager
-import java.util.UUID
 
-internal class DBStore(context: Context) :
-    SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
+internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
 
     val distributor = DistributorStore()
     val registrations = RegistrationsStore()
@@ -497,7 +496,8 @@ internal class DBStore(context: Context) :
         private fun newToken(
             instance: String,
             distributor: String,
-            db: SQLiteDatabase = writableDatabase
+            db: SQLiteDatabase = writableDatabase,
+            onConflict: Int = SQLiteDatabase.CONFLICT_FAIL
         ): String {
             val token = genToken()
             val values = ContentValues().apply {
@@ -510,7 +510,7 @@ internal class DBStore(context: Context) :
                     TABLE_TOKENS,
                     null,
                     values,
-                    SQLiteDatabase.CONFLICT_FAIL
+                    onConflict
                 )
                 return token
             } catch (_: SQLiteConstraintException) {
@@ -586,28 +586,52 @@ internal class DBStore(context: Context) :
             messageForDistributor: String?,
             vapid: String?,
             keyManager: KeyManager?,
-            overrideTokens: Set<Connection.Token> = emptySet(),
+            overrideTokens: Set<Connection.Token> = emptySet()
         ): Set<Connection.Registration> {
             val db = writableDatabase
             return db.runTransaction {
-                val values = ContentValues().apply {
-                    put(FIELD_INSTANCE, instance)
-                    putNullable(FIELD_MESSAGE, messageForDistributor)
-                    putNullable(FIELD_VAPID, vapid)
-                }
-                val tokens = registrations.listToken(instance, db).associate {
-                    it.distributor to it.token
-                }.toMutableMap()
-                // If the registration with this instance already exists,
-                // we replace the record:
-                // the connection token is removed from TABLE_REGISTRATIONS with the cascade,
-                // So we always insert the connection token again, no matter if it is a new one
-                db.insertWithOnConflict(
+                val selection = "$FIELD_INSTANCE = ?"
+                val selectionArgs = arrayOf(instance)
+                val exists = db.query(
                     TABLE_REGISTRATIONS,
                     null,
-                    values,
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
+                    selection,
+                    selectionArgs,
+                    null,
+                    null,
+                    null
+                ).use {
+                    it.moveToFirst()
+                }
+                if (exists) {
+                    db.update(
+                        TABLE_REGISTRATIONS,
+                        ContentValues().apply {
+                            putNullable(FIELD_MESSAGE, messageForDistributor)
+                            putNullable(FIELD_VAPID, vapid)
+                        },
+                        selection,
+                        selectionArgs
+                    )
+                    this@DBStore.distributor.list().forEach { d ->
+                        newToken(instance, d.packageName, db, SQLiteDatabase.CONFLICT_IGNORE)
+                    }
+                } else {
+                    db.insertWithOnConflict(
+                        TABLE_REGISTRATIONS,
+                        null,
+                        ContentValues().apply {
+                            put(FIELD_INSTANCE, instance)
+                            putNullable(FIELD_MESSAGE, messageForDistributor)
+                            putNullable(FIELD_VAPID, vapid)
+                        },
+                        SQLiteDatabase.CONFLICT_REPLACE
+                    )
+                    this@DBStore.distributor.list().forEach { d ->
+                        newToken(instance, d.packageName, db)
+                    }
+                }
+
                 keyManager?.run {
                     if (!exists(instance)) generate(instance)
                 }
@@ -616,26 +640,14 @@ internal class DBStore(context: Context) :
                  * If there are override tokens, used during migration from shared prefs
                  */
                 overrideTokens.forEach { t ->
-                    if (tokens[t.distributor]?.equals(t.token) != true) {
-                        saveToken(instance, t.distributor, t.token, db)
-                        tokens[t.distributor] = t.token
-                    }
-                }
-
-                this@DBStore.distributor.list().forEach { d ->
-                    tokens[d.packageName]?.let { t ->
-                        saveToken(instance, d.packageName, t, db)
-                    } ?: run {
-                        tokens[d.packageName] = newToken(instance, d.packageName, db)
-                    }
+                    saveToken(instance, t.distributor, t.token, db)
                 }
 
                 val registration = RegistrationData(instance, messageForDistributor, vapid)
-
-                return@runTransaction tokens.map { t ->
+                return@runTransaction listToken(instance, db).map { t ->
                     Connection.Registration(
-                        t.key,
-                        t.value,
+                        t.distributor,
+                        t.token,
                         registration
                     )
                 }.toSet()
