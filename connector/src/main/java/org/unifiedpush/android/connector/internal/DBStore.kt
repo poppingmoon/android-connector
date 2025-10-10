@@ -492,8 +492,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         private fun newToken(
             instance: String,
             distributor: String,
-            db: SQLiteDatabase = writableDatabase,
-            onConflict: Int = SQLiteDatabase.CONFLICT_FAIL
+            db: SQLiteDatabase = writableDatabase
         ): String {
             val token = genToken()
             val values = ContentValues().apply {
@@ -501,12 +500,26 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                 put(FIELD_DISTRIBUTOR, distributor)
                 put(FIELD_CONNECTOR_TOKEN, token)
             }
+            db.query(
+                TABLE_TOKENS,
+                arrayOf(FIELD_CONNECTOR_TOKEN),
+                "$FIELD_INSTANCE = ? AND $FIELD_DISTRIBUTOR = ?",
+                arrayOf(instance, distributor),
+                null,
+                null,
+                null
+            ).use {
+                val col = it.getColumnIndex(FIELD_CONNECTOR_TOKEN)
+                if (it.moveToFirst() && col >= 0) {
+                    return it.getString(col)
+                }
+            }
             try {
                 db.insertWithOnConflict(
                     TABLE_TOKENS,
                     null,
                     values,
-                    onConflict
+                    SQLiteDatabase.CONFLICT_FAIL
                 )
                 return token
             } catch (_: SQLiteConstraintException) {
@@ -612,9 +625,6 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                         selection,
                         selectionArgs
                     )
-                    this@DBStore.distributor.list().forEach { d ->
-                        newToken(instance, d.packageName, db, SQLiteDatabase.CONFLICT_IGNORE)
-                    }
                 } else {
                     db.insertWithOnConflict(
                         TABLE_REGISTRATIONS,
@@ -626,9 +636,11 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                         },
                         SQLiteDatabase.CONFLICT_REPLACE
                     )
-                    this@DBStore.distributor.list().forEach { d ->
-                        newToken(instance, d.packageName, db)
-                    }
+                }
+                // Create tokens for missing distributors
+                // If a registration exists, no token is inserted
+                this@DBStore.distributor.list().forEach { d ->
+                    newToken(instance, d.packageName, db)
                 }
 
                 keyManager?.run {

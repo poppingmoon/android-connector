@@ -289,6 +289,23 @@ class DBStoreTest {
         assertEquals(auth1, auth2)
     }
 
+    /**
+     * Re-registration doesn't create additional tokens
+     */
+    @Test
+    fun testTokensReregistration() {
+        assertNoDistrib()
+        setD1()
+        val tokens1 = db.registrations.listToken(REGISTRATION_INSTANCE)
+        assertEquals(1, tokens1.size)
+        val token1 = tokens1.first()
+        addRegistration()
+        val tokens2 = db.registrations.listToken(REGISTRATION_INSTANCE)
+        assertEquals(1, tokens2.size)
+        val token2 = tokens2.first()
+        assertEquals(token1, token2)
+    }
+
     private fun addRegistration() {
         db.registrations.set(
             REGISTRATION_INSTANCE,
