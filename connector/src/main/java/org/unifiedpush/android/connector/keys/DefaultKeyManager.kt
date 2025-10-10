@@ -39,23 +39,17 @@ class DefaultKeyManager internal constructor(private val store: DBStore.KeyStore
         getKeyStoreEntries(instance).genWebPushKeys()
     }
 
-    override fun getPublicKeySet(instance: String): PublicKeySet? {
-        return getKeyStoreEntries(instance).getWebPushKeys()?.publicKeySet
-    }
+    override fun getPublicKeySet(instance: String): PublicKeySet? = getKeyStoreEntries(instance).getWebPushKeys()?.publicKeySet
 
-    override fun exists(instance: String): Boolean {
-        return getKeyStoreEntries(instance).hasWebPushKeys()
-    }
+    override fun exists(instance: String): Boolean = getKeyStoreEntries(instance).hasWebPushKeys()
 
     override fun delete(instance: String) {
         getKeyStoreEntries(instance).deleteWebPushKeys()
     }
 
-    private fun getKeyStoreEntries(instance: String): WebPushKeysEntries {
-        return if (!legacy && Build.VERSION.SDK_INT >= 23) {
-            WebPushKeysEntries23(instance, store)
-        } else {
-            WebPushKeysEntriesLegacy(instance, store)
-        }
+    private fun getKeyStoreEntries(instance: String): WebPushKeysEntries = if (!legacy && Build.VERSION.SDK_INT >= 23) {
+        WebPushKeysEntries23(instance, store)
+    } else {
+        WebPushKeysEntriesLegacy(instance, store)
     }
 }

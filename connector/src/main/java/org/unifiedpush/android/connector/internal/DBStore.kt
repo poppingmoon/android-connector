@@ -48,7 +48,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
             }
             v++
         }
-        */
+         */
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -80,7 +80,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         }
     }
 
-    inner class DistributorStore() {
+    inner class DistributorStore {
 
         /**
          * Change primary distributor, remove the previous one and its fallback distributors.
@@ -137,7 +137,6 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                     val selection = "$FIELD_DISTRIBUTOR = ?"
                     val selectionArgs = arrayOf(distributor)
                     db.update(TABLE_DISTRIBUTORS, values, selection, selectionArgs)
-
                 } else {
                     // 1.B. Insert the new distrib
                     val values = ContentValues().apply {
@@ -196,10 +195,10 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                         selection,
                         selectionArgs,
                         db
-                    ).any { it.distributor == from }) {
+                    ).any { it.distributor == from }
+                ) {
                     throw CyclicFallbackException()
                 }
-
 
                 val projection = arrayOf(FIELD_FALLBACK_FROM)
                 val fromExists = db.query(
@@ -359,21 +358,21 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
             originSelection: String,
             originSelectionArgs: Array<String>,
             db: SQLiteDatabase = writableDatabase
-        ) : Set<Connection.Token> {
+        ): Set<Connection.Token> {
             val query =
                 "WITH RECURSIVE rec($FIELD_DISTRIBUTOR) AS (" +
-                        "SELECT $FIELD_DISTRIBUTOR" +
-                        " FROM $TABLE_DISTRIBUTORS" +
-                        " WHERE %s".format(originSelection) +
-                        " UNION ALL" +
-                        " SELECT t.$FIELD_DISTRIBUTOR" +
-                        " FROM $TABLE_DISTRIBUTORS t" +
-                        " JOIN rec ON t.$FIELD_FALLBACK_FROM = rec.$FIELD_DISTRIBUTOR" +
-                        ") " +
-                        " SELECT rec.$FIELD_DISTRIBUTOR, t.$FIELD_CONNECTOR_TOKEN" +
-                        " FROM rec" +
-                        " INNER JOIN $TABLE_TOKENS t" +
-                        " ON rec.$FIELD_DISTRIBUTOR = t.$FIELD_DISTRIBUTOR"
+                    "SELECT $FIELD_DISTRIBUTOR" +
+                    " FROM $TABLE_DISTRIBUTORS" +
+                    " WHERE %s".format(originSelection) +
+                    " UNION ALL" +
+                    " SELECT t.$FIELD_DISTRIBUTOR" +
+                    " FROM $TABLE_DISTRIBUTORS t" +
+                    " JOIN rec ON t.$FIELD_FALLBACK_FROM = rec.$FIELD_DISTRIBUTOR" +
+                    ") " +
+                    " SELECT rec.$FIELD_DISTRIBUTOR, t.$FIELD_CONNECTOR_TOKEN" +
+                    " FROM rec" +
+                    " INNER JOIN $TABLE_TOKENS t" +
+                    " ON rec.$FIELD_DISTRIBUTOR = t.$FIELD_DISTRIBUTOR"
             return db.rawQuery(query, originSelectionArgs)
                 .use {
                     val distribColumn = it.getColumnIndex(FIELD_DISTRIBUTOR)
@@ -407,12 +406,12 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
             db.runTransaction {
                 // 1. change fallback_from of the next distrib
                 val query = "UPDATE $TABLE_DISTRIBUTORS" +
-                        " SET $FIELD_FALLBACK_FROM = (" +
-                        "   SELECT $FIELD_FALLBACK_FROM" +
-                        "   FROM $TABLE_DISTRIBUTORS" +
-                        "   WHERE $FIELD_DISTRIBUTOR = ?" +
-                        ")" +
-                        " WHERE $FIELD_FALLBACK_FROM = ?"
+                    " SET $FIELD_FALLBACK_FROM = (" +
+                    "   SELECT $FIELD_FALLBACK_FROM" +
+                    "   FROM $TABLE_DISTRIBUTORS" +
+                    "   WHERE $FIELD_DISTRIBUTOR = ?" +
+                    ")" +
+                    " WHERE $FIELD_FALLBACK_FROM = ?"
                 var selectionArgs = arrayOf(distributor, distributor)
                 db.execSQL(query, selectionArgs)
                 // 2. delete distributor
@@ -425,17 +424,14 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         /**
          * List all distributors
          */
-        fun list(db: SQLiteDatabase = readableDatabase): Set<Distributor> {
-            return db.query(TABLE_DISTRIBUTORS, null, null, null, null, null, null)
-                .use {
-                    generateSequence {
-                        if (it.moveToNext()) it else null
-                    }.mapNotNull { c ->
-                        c.distributor()
-                    }.toSet()
-                }
-        }
-
+        fun list(db: SQLiteDatabase = readableDatabase): Set<Distributor> = db.query(TABLE_DISTRIBUTORS, null, null, null, null, null, null)
+            .use {
+                generateSequence {
+                    if (it.moveToNext()) it else null
+                }.mapNotNull { c ->
+                    c.distributor()
+                }.toSet()
+            }
 
         /**
          * Get [Distributor] from a query cursor
@@ -445,15 +441,15 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
             val ackColumn = getColumnIndex(FIELD_ACK)
 
             val packageName = (
-                    if (distribColumn >= 0) getString(distribColumn) else null
-                    ) ?: return null
+                if (distribColumn >= 0) getString(distribColumn) else null
+                ) ?: return null
             val ack = if (ackColumn >= 0) getInt(ackColumn) != 0 else false
 
             return Distributor(packageName, ack)
         }
     }
 
-    inner class RegistrationsStore() {
+    inner class RegistrationsStore {
 
         private fun genToken(): String = UUID.randomUUID().toString()
 
@@ -555,13 +551,16 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                 projection,
                 selection,
                 selectionArgs,
-                null, null, null
+                null,
+                null,
+                null
             ).use {
                 val distribCol = it.getColumnIndex(FIELD_DISTRIBUTOR)
                 val instanceCol = it.getColumnIndex(FIELD_INSTANCE)
-                if (it.moveToFirst()
-                    && distribCol >= 0
-                    && instanceCol >= 0) {
+                if (it.moveToFirst() &&
+                    distribCol >= 0 &&
+                    instanceCol >= 0
+                ) {
                     Connection.Instance(
                         it.getString(distribCol),
                         it.getString(instanceCol)
@@ -659,10 +658,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
          *
          * @return list of remaining instances
          */
-        fun remove(
-            instance: String,
-            keyManager: KeyManager,
-        ): Set<String> {
+        fun remove(instance: String, keyManager: KeyManager): Set<String> {
             val db = writableDatabase
             return db.runTransaction {
                 val selection = "$FIELD_INSTANCE = ?"
@@ -677,9 +673,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         /**
          * Remove all instances
          */
-        fun removeAll(
-            keyManager: KeyManager,
-        ) {
+        fun removeAll(keyManager: KeyManager) {
             val db = writableDatabase
             db.runTransaction {
                 listInstances(db).forEach {
@@ -693,15 +687,16 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         /**
          * List all registrations
          */
-        fun list(db: SQLiteDatabase = readableDatabase): Set<RegistrationData> {
-            return db.query(TABLE_REGISTRATIONS, null, null, null, null, null, null)
+        fun list(db: SQLiteDatabase = readableDatabase): Set<RegistrationData> =
+            db.query(TABLE_REGISTRATIONS, null, null, null, null, null, null)
                 .use {
                     val instanceCol = it.getColumnIndex(FIELD_INSTANCE)
                     val msgCol = it.getColumnIndex(FIELD_MESSAGE)
                     val vapidCol = it.getColumnIndex(FIELD_VAPID)
                     if (instanceCol >= 0 ||
                         msgCol >= 0 ||
-                        vapidCol >= 0) {
+                        vapidCol >= 0
+                    ) {
                         generateSequence {
                             if (it.moveToNext()) it else null
                         }.map { r ->
@@ -715,7 +710,6 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                         emptySet()
                     }
                 }
-        }
 
         /**
          * List all instances
@@ -730,10 +724,10 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                     if (col >= 0) {
                         generateSequence {
                             if (it.moveToNext()) it else null
-                        }.map { c->
+                        }.map { c ->
                             c.getString(col)
                         }.toSet()
-                    } else{
+                    } else {
                         emptySet()
                     }
                 }
@@ -744,10 +738,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
          *
          * @return set of [Connection.Token]
          */
-        fun listToken(
-            instance: String?,
-            db: SQLiteDatabase = readableDatabase
-        ): Set<Connection.Token> {
+        fun listToken(instance: String?, db: SQLiteDatabase = readableDatabase): Set<Connection.Token> {
             val selection = instance?.let { "$FIELD_INSTANCE = ?" }
             val selectionArg = instance?.let { arrayOf(it) }
             val projection = arrayOf(FIELD_DISTRIBUTOR, FIELD_CONNECTOR_TOKEN)
@@ -756,7 +747,9 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                 projection,
                 selection,
                 selectionArg,
-                null, null, null
+                null,
+                null,
+                null
             ).use {
                 val distribCol = it.getColumnIndex(FIELD_DISTRIBUTOR)
                 val tokenCol = it.getColumnIndex(FIELD_CONNECTOR_TOKEN)
@@ -776,7 +769,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         }
     }
 
-    inner class KeyStore() {
+    inner class KeyStore {
         fun get(instance: String): WebPushKeysRecord? {
             val db = readableDatabase
             val selection = "$FIELD_INSTANCE = ?"
@@ -828,7 +821,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
                 null,
                 values,
                 SQLiteDatabase.CONFLICT_REPLACE
-                )
+            )
         }
 
         /**
@@ -846,9 +839,10 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         value?.let { put(key, it) } ?: putNull(key)
     }
 
-    private fun Cursor.getNullableString(col: Int): String? {
-        return if (isNull(col)) null
-        else getString(col)
+    private fun Cursor.getNullableString(col: Int): String? = if (isNull(col)) {
+        null
+    } else {
+        getString(col)
     }
 
     private fun <T> SQLiteDatabase.runTransaction(block: () -> T): T {
@@ -867,7 +861,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
      *
      * Distributor D1 fallbacks to D2 and D2 tries to fallback to D1
      */
-    class CyclicFallbackException: AndroidException()
+    class CyclicFallbackException : AndroidException()
 
     companion object {
         private var instance: DBStore? = null
@@ -934,49 +928,47 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
          * DO NOT EDIT! It is better to always run all the upgrades
          */
         private const val CREATE_TABLE_DISTRIBUTORS = "CREATE TABLE $TABLE_DISTRIBUTORS (" +
-                "$FIELD_DISTRIBUTOR TEXT PRIMARY KEY," +
-                "$FIELD_FALLBACK_FROM TEXT," +
-                "$FIELD_ACK INTEGER," +
-                "$FIELD_DATE_INSERTION INTEGER," +
-                "FOREIGN KEY ($FIELD_FALLBACK_FROM)" +
-                    " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE" +
-                ");"
+            "$FIELD_DISTRIBUTOR TEXT PRIMARY KEY," +
+            "$FIELD_FALLBACK_FROM TEXT," +
+            "$FIELD_ACK INTEGER," +
+            "$FIELD_DATE_INSERTION INTEGER," +
+            "FOREIGN KEY ($FIELD_FALLBACK_FROM)" +
+            " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE" +
+            ");"
 
         /**
          * DO NOT EDIT! It is better to always run all the upgrades
          */
         private const val CREATE_TABLE_REGISTRATIONS = "CREATE TABLE $TABLE_REGISTRATIONS (" +
-                "$FIELD_INSTANCE TEXT PRIMARY KEY," +
-                "$FIELD_MESSAGE TEXT," +
-                "$FIELD_VAPID TEXT" +
-                ");"
+            "$FIELD_INSTANCE TEXT PRIMARY KEY," +
+            "$FIELD_MESSAGE TEXT," +
+            "$FIELD_VAPID TEXT" +
+            ");"
 
         /**
          * DO NOT EDIT! It is better to always run all the upgrades
          */
         private const val CREATE_TABLE_TOKENS = "CREATE TABLE $TABLE_TOKENS (" +
-                "$FIELD_CONNECTOR_TOKEN TEXT PRIMARY KEY," +
-                "$FIELD_INSTANCE TEXT," +
-                "$FIELD_DISTRIBUTOR TEXT," +
-                "FOREIGN KEY ($FIELD_INSTANCE)" +
-                    " REFERENCES $TABLE_REGISTRATIONS($FIELD_INSTANCE) ON DELETE CASCADE," +
-                "FOREIGN KEY ($FIELD_DISTRIBUTOR)" +
-                    " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE" +
-                ");"
+            "$FIELD_CONNECTOR_TOKEN TEXT PRIMARY KEY," +
+            "$FIELD_INSTANCE TEXT," +
+            "$FIELD_DISTRIBUTOR TEXT," +
+            "FOREIGN KEY ($FIELD_INSTANCE)" +
+            " REFERENCES $TABLE_REGISTRATIONS($FIELD_INSTANCE) ON DELETE CASCADE," +
+            "FOREIGN KEY ($FIELD_DISTRIBUTOR)" +
+            " REFERENCES $TABLE_DISTRIBUTORS($FIELD_DISTRIBUTOR) ON DELETE CASCADE" +
+            ");"
 
         /**
          * DO NOT EDIT! It is better to always run all the upgrades
          */
         private const val CREATE_TABLE_KEYS = "CREATE TABLE $TABLE_KEYS (" +
-                "$FIELD_INSTANCE TEXT PRIMARY KEY," +
-                "$FIELD_AUTH TEXT," +
-                "$FIELD_PUBKEY TEXT," +
-                "$FIELD_PRIVKEY TEXT," +
-                "$FIELD_IV TEXT," +
-                "FOREIGN KEY ($FIELD_INSTANCE)" +
-                " REFERENCES $TABLE_REGISTRATIONS($FIELD_INSTANCE) ON DELETE CASCADE" +
-                ");"
-
+            "$FIELD_INSTANCE TEXT PRIMARY KEY," +
+            "$FIELD_AUTH TEXT," +
+            "$FIELD_PUBKEY TEXT," +
+            "$FIELD_PRIVKEY TEXT," +
+            "$FIELD_IV TEXT," +
+            "FOREIGN KEY ($FIELD_INSTANCE)" +
+            " REFERENCES $TABLE_REGISTRATIONS($FIELD_INSTANCE) ON DELETE CASCADE" +
+            ");"
     }
-
 }

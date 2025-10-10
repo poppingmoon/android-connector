@@ -357,8 +357,8 @@ class DBStoreTest {
         allDistribs
             .filter { it != distrib }
             .forEach { d ->
-            assert(!db.distributor.isPrimary(d))
-        }
+                assert(!db.distributor.isPrimary(d))
+            }
     }
 
     private fun assertDistrib(packageName: String, ack: Boolean) {
@@ -374,11 +374,11 @@ class DBStoreTest {
         val list = db.distributor.list().map { it.packageName }
         val unknownList = distribs.toMutableSet()
         distribs.forEach { d ->
-            assert(list.contains(d)) { "$d not in $list"}
+            assert(list.contains(d)) { "$d not in $list" }
             unknownList.remove(d)
         }
         unknownList.forEach { d ->
-            assert(!list.contains(d)) { "$d in $list"}
+            assert(!list.contains(d)) { "$d in $list" }
         }
     }
 
@@ -389,10 +389,10 @@ class DBStoreTest {
         val unknownList = allDistribs.filter { it !in distribs }
         val res = block().toMutableList()
         distribs.forEach { d ->
-            assert(res.map{ it.distributor }.contains(d)) { "$d not in $res" }
+            assert(res.map { it.distributor }.contains(d)) { "$d not in $res" }
         }
         unknownList.forEach { d ->
-            assert(!res.map{ it.distributor }.contains(d)) { "$d in $res" }
+            assert(!res.map { it.distributor }.contains(d)) { "$d in $res" }
         }
     }
 
@@ -410,7 +410,9 @@ class DBStoreTest {
         const val REGISTRATION_MESSAGE = "message_"
         const val REGISTRATION_VAPID = "BA1Hxzyi1RUM1b5wjxsn7nGxAszw2u61m164i3MrAIxHF6YK5h4SDYic-dRuU_RCPCfA5aq9ojSwk5Y2EmClBPs"
         val allDistribs = setOf(
-            DISTRIB_1, DISTRIB_2, DISTRIB_3
+            DISTRIB_1,
+            DISTRIB_2,
+            DISTRIB_3
         )
     }
 }
