@@ -1,15 +1,12 @@
-package org.unifiedpush.android.connector.keys
+package org.unifiedpush.android.connector.internal.keys
 
-import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Log
 import androidx.annotation.RequiresApi
-import org.unifiedpush.android.connector.PREF_CONNECTOR_AUTH
-import org.unifiedpush.android.connector.PREF_CONNECTOR_IV
-import org.unifiedpush.android.connector.PREF_CONNECTOR_PRIVKEY
-import org.unifiedpush.android.connector.PREF_CONNECTOR_PUBKEY
 import org.unifiedpush.android.connector.TAG
+import org.unifiedpush.android.connector.internal.DBStore
+import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyStore
@@ -23,25 +20,21 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 @RequiresApi(23)
-internal class WebPushKeysEntries23(private val instance: String, private val prefs: SharedPreferences) :
+internal class WebPushKeysEntries23(private val instance: String, private val store: DBStore.KeyStore) :
     WebPushKeysEntries {
     override fun getWebPushKeys(): WebPushKeys? {
-        val auth =
-            prefs.getString(PREF_CONNECTOR_AUTH.format(instance), null)
-                ?.b64decode()
-                ?: return null
-        val iv =
-            prefs.getString(PREF_CONNECTOR_IV.format(instance), null)
-                ?.b64decode()
-                ?: return null
-        val sealedPrivateKey =
-            prefs.getString(PREF_CONNECTOR_PRIVKEY.format(instance), null)
-                ?.b64decode()
-                ?: return null
-        val publicKey =
-            prefs.getString(PREF_CONNECTOR_PUBKEY.format(instance), null)
-                ?.deserializePubKey()
-                ?: return null
+        val record = store.get(instance) ?: run {
+            Log.d(TAG, "getWebPushKeys: no record found")
+            return null
+        }
+
+        val auth = record.auth.b64decode()
+        val iv = record.iv?.b64decode() ?: run {
+            Log.d(TAG, "getWebPushKeys: non encrypted record found")
+            return null
+        }
+        val sealedPrivateKey = record.privKey.b64decode()
+        val publicKey = record.pubKey.deserializePubKey()
 
         val cipher = getAesGcmCipher(iv)
         val privateBytes = try {
@@ -57,21 +50,24 @@ internal class WebPushKeysEntries23(private val instance: String, private val pr
             KeyFactory.getInstance("EC").generatePrivate(
                 PKCS8EncodedKeySpec(privateBytes),
             )
+        Log.d(TAG, "getWebPushKeys: keys found")
         return WebPushKeys(auth, KeyPair(publicKey, privateKey))
     }
 
     override fun genWebPushKeys(): WebPushKeys {
+        Log.d(TAG, "Generating WebPushKeys")
         val keys = WebPushKeys.new()
 
         val cipher = getNewAesGcmCipher()
         val sealedPrivateKey = cipher.doFinal(keys.keyPair.private.encoded)
-
-        prefs.edit()
-            .putString(PREF_CONNECTOR_AUTH.format(instance), keys.auth.b64encode())
-            .putString(PREF_CONNECTOR_IV.format(instance), cipher.iv.b64encode())
-            .putString(PREF_CONNECTOR_PUBKEY.format(instance), (keys.keyPair.public as ECPublicKey).serialize())
-            .putString(PREF_CONNECTOR_PRIVKEY.format(instance), sealedPrivateKey.b64encode())
-            .apply()
+        val record = WebPushKeysRecord(
+            instance,
+            keys.auth.b64encode(),
+            (keys.keyPair.public as ECPublicKey).serialize(),
+            sealedPrivateKey.b64encode(),
+            cipher.iv.b64encode()
+        )
+        store.set(record)
         return keys
     }
 
@@ -80,10 +76,7 @@ internal class WebPushKeysEntries23(private val instance: String, private val pr
             KeyStore.getInstance(KEYSTORE_PROVIDER).apply {
                 load(null)
             }
-        return prefs.contains(PREF_CONNECTOR_IV.format(instance)) &&
-            prefs.contains(PREF_CONNECTOR_AUTH.format(instance)) &&
-            prefs.contains(PREF_CONNECTOR_PUBKEY.format(instance)) &&
-            prefs.contains(PREF_CONNECTOR_PRIVKEY.format(instance)) &&
+        return store.get(instance)?.iv != null &&
             ks.containsAlias(ALIAS) &&
             // ks.entryInstanceOf(ALIAS, SecretKeyEntry::class.java)
             // logs an exception for some SDK, like SDK30
@@ -92,13 +85,8 @@ internal class WebPushKeysEntries23(private val instance: String, private val pr
     }
 
     override fun deleteWebPushKeys() {
-        Log.d(TAG, "Deleting webpush keys")
-        prefs.edit()
-            .remove(PREF_CONNECTOR_AUTH.format(instance))
-            .remove(PREF_CONNECTOR_IV.format(instance))
-            .remove(PREF_CONNECTOR_PUBKEY.format(instance))
-            .remove(PREF_CONNECTOR_PRIVKEY.format(instance))
-            .apply()
+        Log.d(TAG, "Deleting WebPushKeys")
+        store.remove(instance)
     }
 
     /**

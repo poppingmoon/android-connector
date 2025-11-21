@@ -9,7 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import org.unifiedpush.android.connector.internal.Store
+import org.unifiedpush.android.connector.internal.DBStore
 
 /**
  * Helper with functions to request the distributor's link activity for result and process the result
@@ -90,9 +90,7 @@ class LinkActivityHelper(private val activity: Activity) {
                 // targetPackage has been renamed creatorPackage after SDK 17
             }?.targetPackage?.let {
                 Log.d(TAG, "Using distributor $it.")
-                Store(activity).apply {
-                    saveDistributor(it)
-                }
+                DBStore.get(activity).distributor.setPrimary(it)
                 return true
             } ?: run {
                 Log.d(TAG, "Could not find creator of pending intent")

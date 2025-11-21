@@ -1,4 +1,4 @@
-package org.unifiedpush.android.connector.keys
+package org.unifiedpush.android.connector.internal.keys
 
 import org.unifiedpush.android.connector.data.PublicKeySet
 import java.security.KeyPair

@@ -6,7 +6,7 @@ import android.content.Intent
 import android.util.Log
 import org.unifiedpush.android.connector.data.PushEndpoint
 import org.unifiedpush.android.connector.data.PushMessage
-import org.unifiedpush.android.connector.internal.Store
+import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.WakeLock
 import org.unifiedpush.android.connector.keys.DefaultKeyManager
 import org.unifiedpush.android.connector.keys.KeyManager
@@ -36,6 +36,7 @@ import java.security.GeneralSecurityException
  *         <action android:name="org.unifiedpush.android.connector.UNREGISTERED"/>
  *         <action android:name="org.unifiedpush.android.connector.NEW_ENDPOINT"/>
  *         <action android:name="org.unifiedpush.android.connector.REGISTRATION_FAILED"/>
+ *         <action android:name="org.unifiedpush.android.connector.TEMP_UNAVAILABLE"/>
  *     </intent-filter>
  * </receiver>
  * ```
@@ -56,8 +57,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
 
     /**
      * A new endpoint is to be used for sending push messages. The new endpoint
-     * should be send to the application server, and the app should sync for
-     * missing notifications.
+     * should be send to the application server.
      */
     abstract fun onNewEndpoint(
         context: Context,
@@ -76,12 +76,29 @@ abstract class MessagingReceiver : BroadcastReceiver() {
     )
 
     /**
-     * This application is unregistered by the distributor from receiving push messages
+     * This registration is unregistered by the distributor and won't receive push messages anymore.
+     *
+     * The registration should be removed from the application server.
      */
     abstract fun onUnregistered(
         context: Context,
         instance: String,
     )
+
+    /**
+     * The distributor backend is temporary unavailable.
+     *
+     * A fallback solution can be implemented until the push server is back online.
+     * For example, it is possible to implement an internal connection to the application
+     * server or periodically fetch notifications to the application server.
+     * When the server is available again, [onNewEndpoint] is called.
+     *
+     * Does nothing by default
+     */
+    open fun onTempUnavailable(
+        context: Context,
+        instance: String,
+    ) {}
 
     /**
      * A new message is received. The message contains the decrypted content of the push message
@@ -101,34 +118,92 @@ abstract class MessagingReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         val token = intent.getStringExtra(EXTRA_TOKEN)
-        val store = Store(context)
+        val store = DBStore.get(context)
         val keyManager = getKeyManager(context)
-        val instance =
-            token?.let {
-                store.registrationSet.tryGetInstance(it)
-            } ?: return
+        val co = token?.let {
+            store.registrations.getInstance(it)
+        } ?: return
         val wakeLock = WakeLock(context)
         when (intent.action) {
             ACTION_NEW_ENDPOINT -> {
                 val endpoint = intent.getStringExtra(EXTRA_ENDPOINT) ?: return
                 val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
-                val pubKeys = keyManager.getPublicKeySet(instance)
-                store.distributorAck = true
-                onNewEndpoint(context, PushEndpoint(endpoint, pubKeys), instance)
-                store.tryGetDistributor()?.let {
-                    mayAcknowledgeMessage(context, it, id, token)
-                }
+                val pubKeys = keyManager.getPublicKeySet(co.instance)
+                store.distributor.ack(co.distributor)
+                    .forEach {
+                        // If there were some fallbacks, they are now removed
+                        // And we can inform them now
+                        UnifiedPush.broadcastUnregister(context, it)
+                    }
+                val primary = store.distributor.isPrimary(co.distributor)
+                onNewEndpoint(
+                    context,
+                    PushEndpoint(endpoint, pubKeys, !primary),
+                    co.instance
+                )
+                mayAcknowledgeMessage(context, co.distributor, id, token)
             }
             ACTION_REGISTRATION_FAILED -> {
                 val reason = intent.getStringExtra(EXTRA_REASON).toFailedReason()
                 Log.i(TAG, "Failed: $reason")
-                store.registrationSet.removeInstance(instance, keyManager)
-                onRegistrationFailed(context, reason, instance)
+                onRegistrationFailed(context, reason, co.instance)
+            }
+            ACTION_TEMP_UNAVAILABLE -> {
+                intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
+                    try {
+                        val (new, toDel) = store.distributor.setFallback(co.distributor, distrib)
+                        toDel.forEach { co ->
+                            // Broadcast UNREGISTER to potentially removed fallbacks
+                            UnifiedPush.broadcastUnregister(context, co)
+                        }
+                        if (new) {
+                            store.registrations.list().forEach { co ->
+                                store.registrations.set(
+                                    co.instance,
+                                    co.messageForDistributor,
+                                    co.vapid,
+                                    keyManager
+                                ).filter {
+                                    it.distributor == distrib
+                                }.forEach { co ->
+                                    UnifiedPush.register(context, co)
+                                }
+                            }
+                        }
+                        true
+                    } catch (_: DBStore.CyclicFallbackException) {
+                        null
+                    }
+                } ?: run {
+                    onTempUnavailable(context, co.instance)
+                }
             }
             ACTION_UNREGISTERED -> {
-                onUnregistered(context, instance)
-                store.registrationSet.removeInstance(instance, keyManager).ifEmpty {
-                    store.removeDistributor()
+                intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
+                    val (new, toDel) = store.distributor.setPrimary(distrib)
+                    toDel.forEach { co ->
+                        // Broadcast UNREGISTER to potentially removed fallbacks
+                        UnifiedPush.broadcastUnregister(context, co)
+                    }
+                    if (new) {
+                        store.registrations.list().forEach { r ->
+                            UnifiedPush.register(
+                                context,
+                                r.instance,
+                                r.messageForDistributor,
+                                r.vapid,
+                                getKeyManager(context)
+                            )
+                        }
+                    }
+                } ?: run {
+                    // When we receive UNREGISTERED from any distributor, it means the registration
+                    // have to be removed  for all of the fallbacks, and primary too
+                    // so we send UNREGISTER to all (pot. fallback) distrib
+                    // This is fine to send UNREGISTER to the distributor that send UNREGISTERED,
+                    // it should simply ignore the request.
+                    UnifiedPush.unregister(context, co.instance, keyManager)
+                    onUnregistered(context, co.instance)
                 }
             }
             ACTION_MESSAGE -> {
@@ -136,17 +211,15 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                 val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
                 val pushMessage =
                     try {
-                        keyManager.decrypt(instance, message)?.let {
+                        keyManager.decrypt(co.instance, message)?.let {
                             PushMessage(it, true)
                         } ?: PushMessage(message, false)
                     } catch (e: GeneralSecurityException) {
                         Log.w(TAG, "Could not decrypt message, trying with plain text. Cause: ${e.message}")
                         PushMessage(message, false)
                     }
-                onMessage(context, pushMessage, instance)
-                store.tryGetDistributor()?.let {
-                    mayAcknowledgeMessage(context, it, id, token)
-                }
+                onMessage(context, pushMessage, co.instance)
+                mayAcknowledgeMessage(context, co.distributor, id, token)
             }
         }
         wakeLock.release()

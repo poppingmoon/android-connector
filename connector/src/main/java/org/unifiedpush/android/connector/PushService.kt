@@ -26,9 +26,8 @@ import org.unifiedpush.android.connector.data.PushMessage
 abstract class PushService: Service() {
     /**
      * A new endpoint is to be used for sending push messages. The new endpoint
-     * should be send to the application server, and the app should sync for
-     * missing notifications.
-     */
+     * should be send to the application server.
+    */
     abstract fun onNewEndpoint(endpoint: PushEndpoint, instance: String)
 
     /**
@@ -44,9 +43,23 @@ abstract class PushService: Service() {
     abstract fun onRegistrationFailed(reason: FailedReason, instance: String)
 
     /**
-     * This application is unregistered by the distributor from receiving push messages
+     * This registration is unregistered by the distributor and won't receive push messages anymore.
+     *
+     * The registration should be removed from the application server.
      */
     abstract fun onUnregistered(instance: String)
+
+    /**
+     * The distributor backend is temporary unavailable.
+     *
+     * A fallback solution can be implemented until the push server is back online.
+     * For example, it is possible to implement an internal connection to the application
+     * server or periodically fetch notifications to the application server.
+     * When the server is available again, [onNewEndpoint] is called.
+     *
+     * Does nothing by default
+     */
+    open fun onTempUnavailable(instance: String) {}
 
     /**
      * @hide

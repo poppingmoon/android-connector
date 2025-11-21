@@ -10,9 +10,9 @@ import android.content.pm.ResolveInfo
 import android.os.Build
 import android.util.AndroidException
 import android.util.Log
+import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
-import org.unifiedpush.android.connector.internal.Registration
-import org.unifiedpush.android.connector.internal.Store
+import org.unifiedpush.android.connector.internal.data.Connection
 import org.unifiedpush.android.connector.keys.DefaultKeyManager
 import org.unifiedpush.android.connector.keys.KeyManager
 import kotlin.jvm.Throws
@@ -214,7 +214,7 @@ object UnifiedPush {
     /**
      * [register] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manager web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
      */
     @JvmStatic
     fun register(
@@ -224,28 +224,24 @@ object UnifiedPush {
         vapid: String? = null,
         keyManager: KeyManager,
     ) {
-        val store = Store(context)
-        register(
-            context,
-            store,
-            store.registrationSet.newOrUpdate(
-                instance,
-                messageForDistributor,
-                vapid?.replace("=", ""),
-                keyManager,
-            ),
-        )
+        val store = DBStore.get(context)
+        store.registrations.set(
+            instance,
+            messageForDistributor,
+            vapid?.replace("=", ""),
+            keyManager
+        ).forEach { co ->
+            register(context, co)
+        }
     }
 
     @JvmStatic
     @Throws(VapidNotValidException::class)
-    private fun register(
+    internal fun register(
         context: Context,
-        store: Store,
-        registration: Registration,
+        co: Connection.Registration,
     ) {
-        val distributor = getDistributor(context, store, false) ?: return
-        registration.vapid?.let {
+        co.registration.vapid?.let {
             // This is mainly to catch VAPID used with the wrong format,
             // no need to check if this is a real vapid key
             if (!VAPID_REGEX.matches(it)) {
@@ -259,19 +255,19 @@ object UnifiedPush {
 
         val broadcastIntent =
             Intent().apply {
-                `package` = distributor
+                `package` = co.distributor
                 action = ACTION_REGISTER
-                putExtra(EXTRA_TOKEN, registration.token)
+                putExtra(EXTRA_TOKEN, co.token)
                 // For compatibility with AND_2
                 putExtra(EXTRA_FEATURES, arrayOf(FEATURE_BYTES_MESSAGE))
                 // For compatibility with AND_2, replaced by pi for SDK < 34
                 putExtra(EXTRA_APPLICATION, context.packageName)
                 // For SDK < 34
                 putExtra(EXTRA_PI, pi)
-                registration.messageForDistributor?.let {
+                co.registration.messageForDistributor?.let {
                     putExtra(EXTRA_MESSAGE_FOR_DISTRIB, it)
                 }
-                registration.vapid?.let {
+                co.registration.vapid?.let {
                     putExtra(EXTRA_VAPID, it)
                 }
             }
@@ -287,6 +283,7 @@ object UnifiedPush {
      * Send an unregistration request for the [instance] to the saved distributor and remove the registration. Remove the distributor if this is the last instance registered.
      *
      * [MessagingReceiver.onUnregistered] won't be called after that request.
+     * Sends the unregistration request to the fallback distributor as well if there is one
      *
      * @param [context] To interact with the shared preferences and send broadcast intents.
      * @param [instance] Registration instance. Can be used to get multiple registrations, eg. for multi-account support.
@@ -310,7 +307,7 @@ object UnifiedPush {
     /**
      * [unregister] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manager web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
      */
     @JvmStatic
     fun unregister(
@@ -318,31 +315,35 @@ object UnifiedPush {
         instance: String = INSTANCE_DEFAULT,
         keyManager: KeyManager,
     ) {
-        val store = Store(context)
-        val distributor =
-            getDistributor(context, store, false) ?: run {
-                // This should not be necessary
-                store.registrationSet.removeInstances(keyManager)
-                store.removeDistributor()
-                return
-            }
+        val store = DBStore.get(context)
+        // We don't need to check if the distributor is still installed, as we delete the registration after that
+        // And we send UNREGISTER to all distributors (primary/fallbacks) if we have many
+        val tokens = store.registrations.listToken(instance)
+        store.registrations.remove(instance, keyManager).ifEmpty {
+            store.distributor.remove()
+        }
+        tokens.forEach {
+            broadcastUnregister(context, it)
+        }
+    }
+
+    internal fun broadcastUnregister(
+        context: Context,
+        connection: Connection.Token
+    ) {
 
         // For SDK < 34
         val dummyIntent = Intent("org.unifiedpush.dummy_app")
         val pi = PendingIntent.getBroadcast(context, 0, dummyIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        val token = store.registrationSet.tryGetToken(instance) ?: return
         val broadcastIntent =
             Intent().apply {
-                `package` = distributor
+                `package` = connection.distributor
                 action = ACTION_UNREGISTER
-                putExtra(EXTRA_TOKEN, token)
+                putExtra(EXTRA_TOKEN, connection.token)
                 // For SDK < 34
                 putExtra(EXTRA_PI, pi)
             }
-        store.registrationSet.removeInstance(instance, keyManager).ifEmpty {
-            store.removeDistributor()
-        }
 
         if (Build.VERSION.SDK_INT >= 34) {
             val broadcastOptions = BroadcastOptions.makeBasic().setShareIdentityEnabled(true)
@@ -539,16 +540,12 @@ object UnifiedPush {
         context: Context,
         distributor: String,
     ) {
-        val store = Store(context)
-        // We use tryGetDistributor because we don't need
-        // to check if the distributor is still installed.
+        val store = DBStore.get(context)
+        // We don't need to check if the distributor is still installed.
         // There is no reason saveDistributor is called with an
         // uninstalled distributor, and if in any case it is,
         // get*Distributor checks if it is installed.
-        if (store.tryGetDistributor() != distributor) {
-            store.distributorAck = false
-            store.saveDistributor(distributor)
-        }
+        store.distributor.setPrimary(distributor)
     }
 
     /**
@@ -561,7 +558,7 @@ object UnifiedPush {
      * @return The distributor package name if any, else null
      */
     @JvmStatic
-    fun getSavedDistributor(context: Context): String? = getDistributor(context, Store(context), false)
+    fun getSavedDistributor(context: Context): String? = getDistributor(context, DBStore.get(context), false)
 
     /**
      * Get the distributor registered by the user, and the
@@ -573,48 +570,48 @@ object UnifiedPush {
      * @return The distributor package name if any, else null
      */
     @JvmStatic
-    fun getAckDistributor(context: Context): String? = getDistributor(context, Store(context), true)
+    fun getAckDistributor(context: Context): String? = getDistributor(context, DBStore.get(context), true)
 
     /**
      * Get the current distributor.
      *
-     * Send [ACTION_UNREGISTERED] for all instances if the distributor in [Store.tryGetDistributor]
+     * Send [ACTION_UNREGISTERED] for all instances if the distributor
      * is not installed anymore.
      *
      * @param [context] [Context] to interact with package manager.
-     * @param [store] [Store] to access our shared preferences.
+     * @param [store] [DBStore] to access our shared preferences.
      * @param [ack] `true` if the distributor has to be ack.
      */
     @JvmStatic
     private fun getDistributor(
         context: Context,
-        store: Store,
+        store: DBStore,
         ack: Boolean,
     ): String? {
-        if (ack && !store.distributorAck) {
-            return null
-        }
-        return store.tryGetDistributor()?.let { distributor ->
-            if (distributor in getDistributors(context)) {
-                Log.d(TAG, "Found saved distributor.")
-                distributor
-            } else {
-                Log.d(TAG, "There was a distributor, but it isn't installed anymore")
-                store.registrationSet.forEachInstance {
-                    broadcastLocalUnregistered(context, store, it)
-                }
-                null
+        val savedDistributors = store.distributor.list()
+        val availableDistributors = getDistributors(context)
+        return if (savedDistributors.isEmpty()) {
+            null
+        } else if (savedDistributors.none { it.packageName in availableDistributors}) {
+            Log.d(TAG, "There was a distributor, but it isn't installed anymore")
+            store.registrations.listToken(null).forEach { t ->
+                broadcastLocalUnregistered(context, t.token)
             }
+            null
+        } else {
+            savedDistributors.filter { it.packageName !in availableDistributors }
+                .forEach {
+                store.distributor.remove(it.packageName)
+            }
+            store.distributor.get().takeIf { !ack || it?.ack == true }?.packageName
         }
     }
 
     @JvmStatic
     private fun broadcastLocalUnregistered(
         context: Context,
-        store: Store,
-        instance: String,
+        token: String
     ) {
-        val token = store.registrationSet.tryGetToken(instance) ?: return
         val broadcastIntent =
             Intent().apply {
                 `package` = context.packageName
@@ -667,19 +664,19 @@ object UnifiedPush {
     /**
      * [removeDistributor] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manager web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
      */
     @JvmStatic
     fun removeDistributor(
         context: Context,
         keyManager: KeyManager,
     ) {
-        val store = Store(context)
-        store.registrationSet.forEachInstance {
-            unregister(context, it)
+        val store = DBStore.get(context)
+        store.registrations.listInstances().forEach {
+            unregister(context, it, keyManager)
         }
-        store.registrationSet.removeInstances(keyManager)
-        store.removeDistributor()
+        store.registrations.removeAll(keyManager)
+        store.distributor.remove()
     }
 
     /**

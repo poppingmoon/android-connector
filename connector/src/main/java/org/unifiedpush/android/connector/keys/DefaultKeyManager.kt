@@ -3,10 +3,13 @@ package org.unifiedpush.android.connector.keys
 import android.content.Context
 import android.os.Build
 import com.google.crypto.tink.apps.fixed_webpush.WebPushHybridDecrypt
-import org.unifiedpush.android.connector.PREF_MASTER
-import org.unifiedpush.android.connector.data.PublicKeySet
 import java.security.interfaces.ECPrivateKey
 import java.security.interfaces.ECPublicKey
+import org.unifiedpush.android.connector.data.PublicKeySet
+import org.unifiedpush.android.connector.internal.DBStore
+import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntries
+import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntries23
+import org.unifiedpush.android.connector.internal.keys.WebPushKeysEntriesLegacy
 
 /**
  * Default [KeyManager].
@@ -15,15 +18,14 @@ import java.security.interfaces.ECPublicKey
  * key in the Android Key Store.
  *
  * For SDK < 23, private keys are stored in plain text in shared preferences.
+ *
+ * [legacy] is used to force legacy store, for the tests
  */
-class DefaultKeyManager(context: Context) : KeyManager {
-    private val preferences = context.getSharedPreferences(PREF_MASTER, Context.MODE_PRIVATE)
+class DefaultKeyManager internal constructor(private val store: DBStore.KeyStore, private val legacy: Boolean = false) : KeyManager {
+    constructor(context: Context) : this(store = DBStore.get(context).keys)
 
-    override fun decrypt(
-        instance: String,
-        sealed: ByteArray,
-    ): ByteArray? {
-        val keys = getKeyStoreEntries(instance).getOrNullWebPushKeys() ?: return null
+    override fun decrypt(instance: String, sealed: ByteArray): ByteArray? {
+        val keys = getKeyStoreEntries(instance).getWebPushKeys() ?: return null
         val hybridDecrypt =
             WebPushHybridDecrypt.Builder()
                 .withAuthSecret(keys.auth)
@@ -37,23 +39,17 @@ class DefaultKeyManager(context: Context) : KeyManager {
         getKeyStoreEntries(instance).genWebPushKeys()
     }
 
-    override fun getPublicKeySet(instance: String): PublicKeySet? {
-        return getKeyStoreEntries(instance).getOrNullWebPushKeys()?.publicKeySet
-    }
+    override fun getPublicKeySet(instance: String): PublicKeySet? = getKeyStoreEntries(instance).getWebPushKeys()?.publicKeySet
 
-    override fun exists(instance: String): Boolean {
-        return getKeyStoreEntries(instance).getOrNullWebPushKeys() != null
-    }
+    override fun exists(instance: String): Boolean = getKeyStoreEntries(instance).hasWebPushKeys()
 
     override fun delete(instance: String) {
         getKeyStoreEntries(instance).deleteWebPushKeys()
     }
 
-    private fun getKeyStoreEntries(instance: String): WebPushKeysEntries {
-        return if (Build.VERSION.SDK_INT >= 23) {
-            WebPushKeysEntries23(instance, preferences)
-        } else {
-            WebPushKeysEntriesLegacy(instance, preferences)
-        }
+    private fun getKeyStoreEntries(instance: String): WebPushKeysEntries = if (!legacy && Build.VERSION.SDK_INT >= 23) {
+        WebPushKeysEntries23(instance, store)
+    } else {
+        WebPushKeysEntriesLegacy(instance, store)
     }
 }

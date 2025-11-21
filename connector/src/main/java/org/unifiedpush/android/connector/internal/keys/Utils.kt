@@ -1,4 +1,4 @@
-package org.unifiedpush.android.connector.keys
+package org.unifiedpush.android.connector.internal.keys
 
 import android.util.Base64
 import com.google.crypto.tink.subtle.EllipticCurves
