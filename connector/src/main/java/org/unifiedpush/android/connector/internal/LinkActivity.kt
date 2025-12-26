@@ -21,8 +21,14 @@ internal class LinkActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!helper.startLinkActivityForResult()) {
-            stop(false)
+        if (intent.action == LinkActivityHelper.ACTION_PICK) {
+            if (!helper.startPickLinkActivityForResult()) {
+                stop(false)
+            }
+        } else {
+            if (!helper.startLinkActivityForResult()) {
+                stop(false)
+            }
         }
     }
 

@@ -8,10 +8,6 @@ To receive notifications with UnifiedPush, users must have a dedicated applicati
 
 Use the <a href="./connector">connector</a> library to subscribe and receive push notifications with UnifiedPush.
 
-## Customizable Dialog
-
-One of the main purpose of UnifiedPush is to let the users chose the way they receive their notifications. If many distributors are installed on the system, you will need to ask the users what they prefere to use. The <a href="./connector_ui">connector-ui</a> library offers a dialog that ask what distributor to use before registering your application.
-
 ## Embedded FCM Distributor
 
 If the users don't have any UnifiedPush Distributor installed and they have Google Services enabled, you may want to fallback to Google's FCM.
