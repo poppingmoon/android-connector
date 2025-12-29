@@ -26,7 +26,7 @@ import org.unifiedpush.android.connector.data.PushMessage
 abstract class PushService: Service() {
     /**
      * A new endpoint is to be used for sending push messages. The new endpoint
-     * should be send to the application server.
+     * should be sent to the application server.
     */
     abstract fun onNewEndpoint(endpoint: PushEndpoint, instance: String)
 
@@ -37,7 +37,7 @@ abstract class PushService: Service() {
     abstract fun onMessage(message: PushMessage, instance: String)
 
     /**
-     * The registration is not possible, eg. no network, depending on the reason,
+     * The registration is not possible, e.g. no network, depending on the reason,
      * you can try to register again directly.
      */
     abstract fun onRegistrationFailed(reason: FailedReason, instance: String)

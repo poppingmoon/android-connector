@@ -871,7 +871,7 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
     /**
      * Trying to set a cyclic fallback chain
      *
-     * Distributor D1 fallbacks to D2 and D2 tries to fallback to D1
+     * Distributor D1 fallbacks to D2 and D2 tries to fall back to D1
      */
     class CyclicFallbackException : AndroidException()
 

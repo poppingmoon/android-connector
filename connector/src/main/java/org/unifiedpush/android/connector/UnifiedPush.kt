@@ -117,7 +117,7 @@ import kotlin.jvm.Throws
  *
  * // Get a list of distributors that are available
  * val distributors = UnifiedPush.getDistributors(context)
- * // select one or ask the user which distributor to use, eg. with a dialog
+ * // select one or ask the user which distributor to use, e.g. with a dialog
  * val userDistrib = yourFunc(distributors)
  * // save the distributor
  * UnifiedPush.saveDistributor(context, userDistrib)
@@ -157,7 +157,7 @@ import kotlin.jvm.Throws
  *
  * ### Unsubscribe
  *
- * To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribed to if you used one during registration.
+ * To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribe to if you used one during registration.
  *
  * It removes the distributor if this is the last instance to unregister.
  *
@@ -187,11 +187,11 @@ object UnifiedPush {
      * If there was a distributor but it has been removed, [MessagingReceiver.onUnregistered] will be called for all subscribed instances.
      *
      * @param [context] To interact with the shared preferences and send broadcast intents.
-     * @param [instance] Registration instance. Can be used to get multiple registrations, eg. for multi-account support.
+     * @param [instance] Registration instance. Can be used to get multiple registrations, e.g. for multi-account support.
      * @param [messageForDistributor] May be shown by the distributor UI to identify this registration.
      * @param [vapid] VAPID public key ([RFC8292](https://www.rfc-editor.org/rfc/rfc8292)) base64url encoded of the uncompressed form (87 chars long).
      *
-     * @throws [VapidNotValidException] if [vapid] is not in the in the uncompressed form and base64url encoded.
+     * @throws [VapidNotValidException] if [vapid] is not in the uncompressed form and base64url encoded.
      */
     @JvmStatic
     fun register(
@@ -217,7 +217,7 @@ object UnifiedPush {
     /**
      * [register] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. Default: [DefaultKeyManager].
      */
     @JvmStatic
     fun register(
@@ -289,7 +289,7 @@ object UnifiedPush {
      * Sends the unregistration request to the fallback distributor as well if there is one
      *
      * @param [context] To interact with the shared preferences and send broadcast intents.
-     * @param [instance] Registration instance. Can be used to get multiple registrations, eg. for multi-account support.
+     * @param [instance] Registration instance. Can be used to get multiple registrations, e.g. for multi-account support.
      */
     @JvmStatic
     fun unregister(
@@ -310,7 +310,7 @@ object UnifiedPush {
     /**
      * [unregister] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. Default: [DefaultKeyManager].
      */
     @JvmStatic
     fun unregister(
@@ -445,7 +445,7 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity or it will fail and the callback will be called with `false`
+     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
@@ -501,7 +501,7 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity or it will fail and the callback will be called with `false`
+     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
@@ -542,8 +542,8 @@ object UnifiedPush {
      * Try to use the saved distributor else, use the default distributor opening the deeplink "unifiedpush://link"
      *
      * It can be used on application startup to register to the distributor.
-     * If you had already registered to a distributor, this ensure the connection is working.
-     * If the previous distributor has been uninstalled, it will fallback to the user's default.
+     * If you had already registered to a distributor, this ensures the connection is working.
+     * If the previous distributor has been uninstalled, it will fall back to the user's default.
      * If you register for the first time, it will use the user's default Distributor or the OS will
      * ask what it should use.
      *
@@ -574,7 +574,7 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity or it will fail if there is no current distributor and the callback will be called with `false`
+     * @param [context] Must be an activity, or it will fail if there is no current distributor and the callback will be called with `false`
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
@@ -623,7 +623,7 @@ object UnifiedPush {
 
     /**
      * Get the distributor registered by the user, and the
-     * distributor has already respond to our requests
+     * distributor has already responded to our requests
      *
      * Will call [MessagingReceiver.onUnregistered] for all instances if the distributor
      * is not installed anymore.
@@ -725,7 +725,7 @@ object UnifiedPush {
     /**
      * [removeDistributor] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. Default: [DefaultKeyManager].
      */
     @JvmStatic
     fun removeDistributor(

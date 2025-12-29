@@ -10,9 +10,9 @@ Use the <a href="./connector">connector</a> library to subscribe and receive pus
 
 ## Embedded FCM Distributor
 
-If the users don't have any UnifiedPush Distributor installed and they have Google Services enabled, you may want to fallback to Google's FCM.
+If the users don't have any UnifiedPush Distributor installed, and they have Google Services enabled, you may want to fall back to Google's FCM.
 
-You can embed an FCM Distributor, and if the user doesn’t have another distributor, this one will be used. The <a href="./embedded_fcm_distributor">embedded_fcm_distributor</a> library basically act like an UnifiedPush Distributor, but is internal to the app and passes notifications through FCM. It doesn't contain proprietary code.
+You can embed an FCM Distributor, and if the user doesn't have another distributor, this one will be used. The <a href="./embedded_fcm_distributor">embedded_fcm_distributor</a> library basically act like an UnifiedPush Distributor, but is internal to the app and passes notifications through FCM. It doesn't contain proprietary code.
 
 ## Example implementation
 

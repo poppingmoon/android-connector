@@ -31,7 +31,7 @@ fi
 TOKEN=$(gpg --decrypt $TOKEN_GPG_FILE)
 
 if [ $? -ne 0 ]; then
-    echo "An error occured while decrypting the token. Aborting."
+    echo "An error occurred while decrypting the token. Aborting."
     exit 1
 fi
 

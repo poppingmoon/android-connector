@@ -19,7 +19,7 @@ import java.security.GeneralSecurityException
  *
  * ## Deprecation note
  * The library already embed a receiver implementing this receiver and forward the events to a service. This
- * allow us to maintain the declaration of the exposed service, which can make maintenance easier if any change
+ * allows us to maintain the declaration of the exposed service, which can make maintenance easier if any change
  * is required in the future.
  *
  * It is still possible to use this receiver directly: if a receiver with this intent filter is declared
@@ -57,7 +57,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
 
     /**
      * A new endpoint is to be used for sending push messages. The new endpoint
-     * should be send to the application server.
+     * should be sent to the application server.
      */
     abstract fun onNewEndpoint(
         context: Context,
@@ -66,7 +66,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
     )
 
     /**
-     * The registration is not possible, eg. no network, depending on the reason,
+     * The registration is not possible, e.g. no network, depending on the reason,
      * you can try to register again directly.
      */
     abstract fun onRegistrationFailed(
@@ -111,7 +111,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
     )
 
     /**
-     * Handle UnifiedPush messages, should not be override
+     * Handle UnifiedPush messages, should not be overridden
      */
     override fun onReceive(
         context: Context,
@@ -198,7 +198,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                     }
                 } ?: run {
                     // When we receive UNREGISTERED from any distributor, it means the registration
-                    // have to be removed  for all of the fallbacks, and primary too
+                    // have to be removed for all the fallbacks, and primary too
                     // so we send UNREGISTER to all (pot. fallback) distrib
                     // This is fine to send UNREGISTER to the distributor that send UNREGISTERED,
                     // it should simply ignore the request.

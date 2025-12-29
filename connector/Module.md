@@ -175,7 +175,7 @@ import org.unifiedpush.android.connector.UnifiedPush
 
 // Get a list of distributors that are available
 val distributors = UnifiedPush.getDistributors(context)
-// select one or ask the user which distributor to use, eg. with a dialog
+// select one or ask the user which distributor to use, e.g. with a dialog
 val userDistrib = yourFunc(distributors)
 // save the distributor
 UnifiedPush.saveDistributor(context, userDistrib)
