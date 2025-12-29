@@ -1,6 +1,5 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
-    ext.kotlin_version = '2.3.0' // ! Check kotlin compiler option to update languageVersion
     ext.dokka_version = '1.9.20'
     repositories {
         google()
@@ -8,9 +7,7 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.2'
-        // Keep 2.2.20 for buildscript dependencies until 2.3.0 is supported by the IDE
-        // classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0"
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
