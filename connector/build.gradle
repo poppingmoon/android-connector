@@ -21,7 +21,7 @@ android {
             // languageVersion provides source compatibility with the specified version of Kotlin
             // By default it uses $kotlinVersion (2.2)
             // We set it to the lowest non-deprecated value
-            languageVersion.set(KotlinVersion.KOTLIN_2_0)
+            languageVersion.set(KotlinVersion.KOTLIN_2_1)
         }
     }
 
