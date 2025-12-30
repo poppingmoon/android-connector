@@ -3,7 +3,7 @@ steps:
         # https://github.com/MobileDevOps/android-sdk-image
         image: mobiledevops/android-sdk-image:latest
         when:
-          branch: main
+          branch: [main, dev]
           event: [push, pull_request, manual]
         commands:
           - ln -s . android-connector
@@ -16,7 +16,7 @@ steps:
     upload:
         image: codeberg.org/s1m/woodpecker-upload:latest
         when:
-            branch: main
+            branch: [main, dev]
             event: [push, pull_request, manual]
         settings:
             token:
