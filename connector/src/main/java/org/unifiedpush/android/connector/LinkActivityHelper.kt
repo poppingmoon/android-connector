@@ -47,7 +47,7 @@ class LinkActivityHelper(private val activity: Activity) {
     private val gRequestCode = (1..Int.MAX_VALUE).random()
 
     /**
-     * Start distributor's link activity for result.
+     * Start distributor's link activity for result. Use default distributor if available
      *
      * @return `true` if the activity has been requested else no distributor can handle the request
      */
@@ -59,6 +59,26 @@ class LinkActivityHelper(private val activity: Activity) {
         resolveLinkActivityPackageName(activity, intent)?.let {
             Log.d(TAG, "Found activity for $it default=${it != "android"}")
             activity.startActivityForResult(intent, gRequestCode)
+            return true
+        } ?: run {
+            Log.d(TAG, "No activity found for deeplink")
+        }
+        return false
+    }
+
+    /**
+     * Start distributor's link activity for result.
+     *
+     * @return `true` if the activity has been requested else no distributor can handle the request
+     */
+    fun startPickLinkActivityForResult(): Boolean {
+        val intent =
+            Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("unifiedpush://link")
+            }
+        resolveLinkActivityPackageName(activity, intent)?.let {
+            Log.d(TAG, "Found activity for $it, has default=${it != "android"}")
+            activity.startActivityForResult(Intent.createChooser(intent, "UnifiedPush"), gRequestCode)
             return true
         } ?: run {
             Log.d(TAG, "No activity found for deeplink")
@@ -104,6 +124,7 @@ class LinkActivityHelper(private val activity: Activity) {
 
     internal companion object {
         private const val TAG = "UnifiedPush.Link"
+        const val ACTION_PICK = "UnifiedPush.pick"
 
         /**
          * Resolve the package name of the application able to open `unifiedpush://link`

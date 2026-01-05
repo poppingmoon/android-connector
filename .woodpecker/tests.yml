@@ -1,0 +1,9 @@
+steps:
+    check:
+        # https://github.com/MobileDevOps/android-sdk-image
+        image: mobiledevops/android-sdk-image:latest
+        when:
+          branch: [main, dev]
+          event: [push, pull_request, manual]
+        commands:
+          - ./gradlew :connector:testDebugUnitTest --stacktrace

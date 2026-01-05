@@ -30,19 +30,12 @@ import kotlin.jvm.Throws
  * When you set UnifiedPush for the first time on your application, you will want to use the default user's
  * distributor.
  *
- * From time to time, like every time you starts your application, you should register your application in case the
- * user have uninstalled the previous distributor.
- * If the previous distributor is uninstalled, you can fallback to the default one again.
- *
- * Therefore, you can use [tryUseCurrentOrDefaultDistributor][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
- * to select the saved distributor or the default one when your application starts (when your main activity is created for instance).
+ * Therefore, you can use [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
+ * to select the saved distributor or the default one when the user enables UnifiedPush.
  *
  * When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
  * It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
  * You can use `instance` to bring multiple-registration support to your application.
- *
- * _If you want, you can use the library `org.unifiedpush.android:connector-ui` instead, it displays a dialog explaining why
- * the OS picker is going to ask which application to pick._
  *
  * <div class="tabs">
  * <input class="tabs_control hidden" type="radio" id="tabs-trydefault-receiver-0" name="tabs-trydefault" checked>
@@ -93,13 +86,15 @@ import kotlin.jvm.Throws
  * </div>
  * </div>
  *
- * Be aware that [tryUseDefaultDistributor][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
+ * Be aware that [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
  * starts a new translucent activity in order to get the result of the distributor activity. You may prefer to use
- * [LinkActivityHelper][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
+ * [`LinkActivityHelper`][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
  *
  * ### Use another distributor
  *
- * You will probably want to allow the users to use another distributor but their default one.
+ * The user may want to use another distributor: it can be achieved with [`tryPickDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryPickDistributor].
+ *
+ * ### Implement your own distributor picker
  *
  * For this, you can get the list of available distributors with [`getDistributors`][org.unifiedpush.android.connector.UnifiedPush.getDistributors].
  *
@@ -109,9 +104,6 @@ import kotlin.jvm.Throws
  * When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
  * It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
  * You can use `instance` to bring multiple-registration support to your application.
- *
- * _If you want, the library `org.unifiedpush.android:connector-ui` offers a customizable dialog
- * that request user's choice and register to this distributor._
  *
  * <div class="tabs">
  * <input class="tabs_control hidden" type="radio" id="tabs-1-receiver-0" name="tabs-1" checked>
@@ -125,7 +117,7 @@ import kotlin.jvm.Throws
  *
  * // Get a list of distributors that are available
  * val distributors = UnifiedPush.getDistributors(context)
- * // select one or ask the user which distributor to use, eg. with a dialog
+ * // select one or ask the user which distributor to use, e.g. with a dialog
  * val userDistrib = yourFunc(distributors)
  * // save the distributor
  * UnifiedPush.saveDistributor(context, userDistrib)
@@ -165,9 +157,20 @@ import kotlin.jvm.Throws
  *
  * ### Unsubscribe
  *
- * To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribed to if you used one during registration.
+ * To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribe to if you used one during registration.
  *
  * It removes the distributor if this is the last instance to unregister.
+ *
+ * ### Regular re-registration
+ *
+ * To ensure the distributor is still installed, and the application is correctly registered, it is recommended to regularly re-register to the distributor.
+ *
+ * For this, from time to time, like every time the application starts, you can control if the distributor is still installed
+ * with [`getAckDistributor`][org.unifiedpush.android.connector.UnifiedPush.getAckDistributor], then call
+ * [`register`][org.unifiedpush.android.connector.UnifiedPush.register].
+ *
+ * If the previous distributor is uninstalled, you can inform the user and/or fallback to the default
+ * one again, with [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor].
  */
 object UnifiedPush {
     // For compatibility purpose with AND_2
@@ -184,11 +187,11 @@ object UnifiedPush {
      * If there was a distributor but it has been removed, [MessagingReceiver.onUnregistered] will be called for all subscribed instances.
      *
      * @param [context] To interact with the shared preferences and send broadcast intents.
-     * @param [instance] Registration instance. Can be used to get multiple registrations, eg. for multi-account support.
+     * @param [instance] Registration instance. Can be used to get multiple registrations, e.g. for multi-account support.
      * @param [messageForDistributor] May be shown by the distributor UI to identify this registration.
      * @param [vapid] VAPID public key ([RFC8292](https://www.rfc-editor.org/rfc/rfc8292)) base64url encoded of the uncompressed form (87 chars long).
      *
-     * @throws [VapidNotValidException] if [vapid] is not in the in the uncompressed form and base64url encoded.
+     * @throws [VapidNotValidException] if [vapid] is not in the uncompressed form and base64url encoded.
      */
     @JvmStatic
     fun register(
@@ -214,7 +217,7 @@ object UnifiedPush {
     /**
      * [register] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. Default: [DefaultKeyManager].
      */
     @JvmStatic
     fun register(
@@ -286,7 +289,7 @@ object UnifiedPush {
      * Sends the unregistration request to the fallback distributor as well if there is one
      *
      * @param [context] To interact with the shared preferences and send broadcast intents.
-     * @param [instance] Registration instance. Can be used to get multiple registrations, eg. for multi-account support.
+     * @param [instance] Registration instance. Can be used to get multiple registrations, e.g. for multi-account support.
      */
     @JvmStatic
     fun unregister(
@@ -307,7 +310,7 @@ object UnifiedPush {
     /**
      * [unregister] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. Default: [DefaultKeyManager].
      */
     @JvmStatic
     fun unregister(
@@ -409,6 +412,64 @@ object UnifiedPush {
     }
 
     /**
+     * Try to pick a distributor opening the deeplink "unifiedpush://link", ignoring the default one
+     *
+     * It uses the OS dialog to select the applications
+     *
+     * **External distributors will be favored over embedded distributors.**
+     *
+     * **Doesn't work with Distributors that don't support AND_3 specs**
+     *
+     * Be aware that this function starts a new translucent activity in order to
+     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
+     * directly in your own activity instead.
+     *
+     * ## Usage
+     *
+     * Kotlin:
+     * ```
+     * tryPickDistributor(context) { success ->
+     *     if (success) {
+     *         //TODO: register
+     *     }
+     * }
+     * ```
+     *
+     * Java:
+     * ```
+     * UnifiedPush.tryPickDistributor(context, success -> {
+     *     if (success) {
+     *         //TODO: register
+     *     }
+     *     return null;
+     * });
+     * ```
+     *
+     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
+     * @param [callback] is a function taking a Boolean as parameter. This boolean is
+     * true if the registration using the deeplink succeeded.
+     */
+    @JvmStatic
+    fun tryPickDistributor(
+        context: Context,
+        callback: (Boolean) -> Unit,
+    ) {
+        if (context is Activity) {
+            LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
+                LinkActivity.callback = callback
+                val intent =
+                    Intent().apply {
+                        setClassName(context.packageName, LinkActivity::class.java.name)
+                        setAction(LinkActivityHelper.ACTION_PICK)
+                    }
+                context.startActivity(intent)
+            } ?: callback(false)
+        } else {
+            callback(false)
+        }
+    }
+
+    /**
      * Try to use the distributor opening the deeplink "unifiedpush://link"
      *
      * It allows users to define a default distributor for all their applications
@@ -440,7 +501,7 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity or it will fail and the callback will be called with `false`
+     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
@@ -481,8 +542,8 @@ object UnifiedPush {
      * Try to use the saved distributor else, use the default distributor opening the deeplink "unifiedpush://link"
      *
      * It can be used on application startup to register to the distributor.
-     * If you had already registered to a distributor, this ensure the connection is working.
-     * If the previous distributor has been uninstalled, it will fallback to the user's default.
+     * If you had already registered to a distributor, this ensures the connection is working.
+     * If the previous distributor has been uninstalled, it will fall back to the user's default.
      * If you register for the first time, it will use the user's default Distributor or the OS will
      * ask what it should use.
      *
@@ -513,7 +574,7 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity or it will fail if there is no current distributor and the callback will be called with `false`
+     * @param [context] Must be an activity, or it will fail if there is no current distributor and the callback will be called with `false`
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
@@ -562,7 +623,7 @@ object UnifiedPush {
 
     /**
      * Get the distributor registered by the user, and the
-     * distributor has already respond to our requests
+     * distributor has already responded to our requests
      *
      * Will call [MessagingReceiver.onUnregistered] for all instances if the distributor
      * is not installed anymore.
@@ -664,7 +725,7 @@ object UnifiedPush {
     /**
      * [removeDistributor] with additional [KeyManager] parameter.
      *
-     * @param [keyManager] To manage web push keys. By default: [DefaultKeyManager].
+     * @param [keyManager] To manage web push keys. Default: [DefaultKeyManager].
      */
     @JvmStatic
     fun removeDistributor(

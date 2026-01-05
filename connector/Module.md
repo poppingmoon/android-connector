@@ -88,19 +88,12 @@ have to be able to process a deeplink.
 When you set UnifiedPush for the first time on your application, you will want to use the default user's
 distributor.
 
-From time to time, like every time you starts your application, you should register your application in case the
-user have uninstalled the previous distributor.
-If the previous distributor is uninstalled, you can fallback to the default one again.
-
-Therefore, you can use [tryUseCurrentOrDefaultDistributor][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
-to select the saved distributor or the default one when your application starts (when your main activity is created for instance).
+Therefore, you can use [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
+to select the saved distributor or the default one when the user enables UnifiedPush.
 
 When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
 It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
 You can use `instance` to bring multiple-registration support to your application.
-
-_If you want, you can use the library `org.unifiedpush.android:connector-ui` instead, it displays a dialog explaining why
-the OS picker is going to ask which application to pick._
 
 <div class="tabs">
 <input class="tabs_control hidden" type="radio" id="tabs-trydefault-receiver-0" name="tabs-trydefault" checked>
@@ -151,13 +144,15 @@ UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success ->{
 </div>
 </div>
 
-Be aware that [tryUseDefaultDistributor][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
+Be aware that [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
 starts a new translucent activity in order to get the result of the distributor activity. You may prefer to use
-[LinkActivityHelper][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
+[`LinkActivityHelper`][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
 
 ### Use another distributor
 
-You will probably want to allow the users to use another distributor but their default one.
+The user may want to use another distributor: it can be achieved with [`tryPickDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryPickDistributor].
+
+### Implement your own distributor picker
 
 For this, you can get the list of available distributors with [`getDistributors`][org.unifiedpush.android.connector.UnifiedPush.getDistributors].
 
@@ -167,9 +162,6 @@ This function must be called before [`register`][org.unifiedpush.android.connect
 When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
 It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
 You can use `instance` to bring multiple-registration support to your application.
-
-_If you want, the library `org.unifiedpush.android:connector-ui` offers a customizable dialog
-that request user's choice and register to this distributor._
 
 <div class="tabs">
 <input class="tabs_control hidden" type="radio" id="tabs-1-receiver-0" name="tabs-1" checked>
@@ -183,7 +175,7 @@ import org.unifiedpush.android.connector.UnifiedPush
 
 // Get a list of distributors that are available
 val distributors = UnifiedPush.getDistributors(context)
-// select one or ask the user which distributor to use, eg. with a dialog
+// select one or ask the user which distributor to use, e.g. with a dialog
 val userDistrib = yourFunc(distributors)
 // save the distributor
 UnifiedPush.saveDistributor(context, userDistrib)
@@ -226,3 +218,14 @@ UnifiedPush.register(
 To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribed to if you used one during registration.
 
 It removes the distributor if this is the last instance to unregister.
+
+### Regular re-registration
+
+To ensure the distributor is still installed, and the application is correctly registered, it is recommended to regularly re-register to the distributor.
+
+For this, from time to time, like every time the application starts, you can control if the distributor is still installed
+with [`getAckDistributor`][org.unifiedpush.android.connector.UnifiedPush.getAckDistributor], then call
+[`register`][org.unifiedpush.android.connector.UnifiedPush.register].
+
+If the previous distributor is uninstalled, you can inform the user and/or fallback to the default
+one again, with [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor].
