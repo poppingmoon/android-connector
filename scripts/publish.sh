@@ -4,12 +4,19 @@ NORMAL=$'\e[0m'
 GREEN=$(tput setaf 2)
 RED=$(tput setaf 1)
 
+AGE_IDENTITY="$HOME/.passage/identities"
+ENC_TOKEN_FILE="$HOME/.passage/store/mavenCentral/token.age"
+
+if [ -z $OCT_CARD ]; then
+    echo "[!] OCT_CARD not set, aborting"
+    exit 1
+fi
+
 ## Read details
 
 ARTIFACT_ID=$( ./gradlew printArtifactId | sed -n '/^artifact=/ s/.*=//p' )
 RELEASE_VERSION=$( ./gradlew printVersion | sed -n '/^version=/ s/.*=//p' )
 DIR="$( echo "${ARTIFACT_ID:?}" | sed 's-[.:]-/-g' )/${RELEASE_VERSION:?}"
-TOKEN_GPG_FILE="$HOME/.password-store/mavenCentral/token.gpg"
 
 ## Confirm
 
@@ -24,11 +31,12 @@ echo "Confirmed."
 
 ## Get token
 
-if [ ! -f $TOKEN_GPG_FILE ]; then
-    echo "[!] $TOKEN_GPG_FILE not found. Aborting."
+if [ ! -f $ENC_TOKEN_FILE ]; then
+    echo "[!] $ENC_TOKEN_FILE not found. Aborting."
     exit 1
 fi
-TOKEN=$(gpg --decrypt $TOKEN_GPG_FILE)
+echo "Decrypting $ENC_TOKEN_FILE"
+TOKEN=$(rage -i $AGE_IDENTITY -d $ENC_TOKEN_FILE)
 
 if [ $? -ne 0 ]; then
     echo "An error occurred while decrypting the token. Aborting."
@@ -43,11 +51,17 @@ rm -rf ~/.m2/repository/${DIR:?}
 ## Sign
 
 cd ~/.m2/repository/
-for file in ${DIR:?}/*; do
-    echo "[+] Signing $file"
+FILES=$(find ${DIR:?} -type f)
+N_FILES=$(echo "$FILES" | wc -l)
+if [ $N_FILES -le 0 ]; then
+    echo "[!] No file to sign, aborting."
+    exit 1
+fi
+echo "[+] Signing $N_FILES files"
+oct batch sign --card "$OCT_CARD" detached -o asc $FILES
+for file in $FILES; do
     sha1sum $file | sed 's/ .*//' > $file.sha1
     md5sum $file | sed 's/ .*//' > $file.md5
-    gpg -ab $file
 done
 
 ## Zip
