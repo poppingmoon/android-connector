@@ -1,5 +1,5 @@
 steps:
-    check:
+    build:
         # https://github.com/MobileDevOps/android-sdk-image
         image: mobiledevops/android-sdk-image:latest
         when:
