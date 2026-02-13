@@ -2,7 +2,14 @@ package org.unifiedpush.android.connector.internal
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.Space
+import android.widget.TextView
 import org.unifiedpush.android.connector.LinkActivityHelper
 
 /**
@@ -21,6 +28,8 @@ internal class LinkActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawable(ColorDrawable(0x99000000.toInt()))
+        setContent()
         if (intent.action == LinkActivityHelper.ACTION_PICK) {
             if (!helper.startPickLinkActivityForResult()) {
                 stop(false)
@@ -30,6 +39,49 @@ internal class LinkActivity : Activity() {
                 stop(false)
             }
         }
+    }
+
+    private fun setContent() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val textView = TextView(this).apply {
+            text = "UnifiedPush"
+            textSize = 24f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        root.addView(
+            Space(this),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+        root.addView(
+            textView,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        )
+        root.addView(
+            Space(this),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                2f
+            )
+        )
+        setContentView(root)
     }
 
     override fun onActivityResult(
