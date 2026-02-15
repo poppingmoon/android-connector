@@ -10,6 +10,7 @@ import android.content.pm.ResolveInfo
 import android.os.Build
 import android.util.AndroidException
 import android.util.Log
+import org.unifiedpush.android.connector.data.ResolvedDistributor
 import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
 import org.unifiedpush.android.connector.internal.data.Connection
@@ -30,8 +31,16 @@ import kotlin.jvm.Throws
  * When you set UnifiedPush for the first time on your application, you will want to use the default user's
  * distributor.
  *
- * Therefore, you can use [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
- * to select the saved distributor or the default one when the user enables UnifiedPush.
+ * Therefore, you can first use [`resolveDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.resolveDefaultDistributor] to check if a default
+ * distributor is defined, or if the user will have to select one.
+ *
+ * If it resolves to [`ResolvedDistributor.ToSelect`][org.unifiedpush.android.connector.data.ResolvedDistributor.ToSelect],
+ * the user will see an OS screen to select their distributor. We recommend introducing this OS screen
+ * with a dialog, e.g. "You are about to select your push service".
+ *
+ * To select the default distributor, you can use [`tryUseDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
+ * or [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor] if you want
+ * to share code for the re-registrations too. These function save the distributor to use.
  *
  * When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
  * It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
@@ -85,10 +94,6 @@ import kotlin.jvm.Throws
  * <!-- END JAVA -->
  * </div>
  * </div>
- *
- * Be aware that [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
- * starts a new translucent activity in order to get the result of the distributor activity. You may prefer to use
- * [`LinkActivityHelper`][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
  *
  * ### Use another distributor
  *
@@ -412,6 +417,45 @@ object UnifiedPush {
     }
 
     /**
+     * Resolve default distributor using the deeplink "unifiedpush://link"
+     *
+     * When the user has a default or a single distributor, it returns [ResolvedDistributor.Found],
+     * and [tryUseDefaultDistributor] is transparent to the user.
+     *
+     * When the user has many distributors but hasn't selected a default yet, it returns
+     * [ResolvedDistributor.ToSelect], and [tryUseDefaultDistributor] will open an OS screen to select one.
+     *
+     * Informing the user about the incoming OS screen helps them to understand why they are selecting
+     * an application. The OS dialog can't have a custom title or message, and we need the OS dialog
+     * to define a default distributor.
+     *
+     * ```
+     * when (val res = UnifiedPush.resolveDefaultDistributor(this)) {
+     *     is ResolvedDistributor.Found -> {
+     *         // The user don't have to interact. Will be the case most of the time,
+     *         // if the user has a default or a single distributor installed
+     *         UnifiedPush.saveDistributor(this, res.packageName)
+     *         UnifiedPush.register(this)
+     *     }
+     *     ResolvedDistributor.ToSelect -> {
+     *         // Use your own dialog before running tryUseDefaultDistributor
+     *         showDialogBeforeSelection(this)
+     *     }
+     *     ResolvedDistributor.NoneAvailable -> {
+     *         // fallback to another solution
+     *     }
+     * }
+     * ```
+     */
+    fun resolveDefaultDistributor(context: Context): ResolvedDistributor {
+        return when (val resolved = LinkActivityHelper.resolveLinkActivityPackageName(context)) {
+            null -> ResolvedDistributor.NoneAvailable
+            "android" -> ResolvedDistributor.ToSelect
+            is String -> ResolvedDistributor.Found(resolved)
+        }
+    }
+
+    /**
      * Try to pick a distributor opening the deeplink "unifiedpush://link", ignoring the default one
      *
      * It uses the OS dialog to select the applications
@@ -420,9 +464,11 @@ object UnifiedPush {
      *
      * **Doesn't work with Distributors that don't support AND_3 specs**
      *
-     * Be aware that this function starts a new translucent activity in order to
-     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
-     * directly in your own activity instead.
+     * This function starts a new translucent activity in order to get the result of the
+     * distributor activity.
+     *
+     * You may prefer to override `onActivityResult` of your own Activity and use
+     * [LinkActivityHelper.startPickLinkActivityForResult] instead.
      *
      * ## Usage
      *
@@ -430,7 +476,7 @@ object UnifiedPush {
      * ```
      * tryPickDistributor(context) { success ->
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      * }
      * ```
@@ -439,7 +485,7 @@ object UnifiedPush {
      * ```
      * UnifiedPush.tryPickDistributor(context, success -> {
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      *     return null;
      * });
@@ -474,11 +520,17 @@ object UnifiedPush {
      *
      * It allows users to define a default distributor for all their applications
      *
+     * **Before calling this function**, you may want to resolve the default distributor with
+     * [resolveDefaultDistributor], to check if the OS will show a screen to the user. In this case,
+     * you can introduce this screen with a dialog "You are about to select your push service"
+     *
      * **External distributors will be favored over embedded distributors.**
      *
-     * Be aware that this function starts a new translucent activity in order to
-     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
-     * directly in your own activity instead.
+     * This function starts a new translucent activity in order to get the result of the
+     * distributor activity.
+     *
+     * You may prefer to override `onActivityResult` of your own Activity and use
+     * [LinkActivityHelper.startLinkActivityForResult] instead.
      *
      * ## Usage
      *
@@ -486,7 +538,7 @@ object UnifiedPush {
      * ```
      * tryUseDefaultDistributor(context) { success ->
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      * }
      * ```
@@ -495,7 +547,7 @@ object UnifiedPush {
      * ```
      * UnifiedPush.tryUseDefaultDistributor(context, success -> {
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      *     return null;
      * });
@@ -511,25 +563,20 @@ object UnifiedPush {
         callback: (Boolean) -> Unit,
     ) {
         if (context is Activity) {
-            LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
-                if (it == "android") {
+            when (val resolved = resolveDefaultDistributor(context)) {
+                ResolvedDistributor.ToSelect -> {
                     LinkActivity.callback = callback
                     val intent =
                         Intent().apply {
                             setClassName(context.packageName, LinkActivity::class.java.name)
                         }
                     context.startActivity(intent)
-                } else {
-                    saveDistributor(context, it)
+                }
+                is ResolvedDistributor.Found -> {
+                    saveDistributor(context, resolved.packageName)
                     callback(true)
                 }
-            } ?: run {
-                // Fallback to AND_2, if there is only one distributor, we use it.
-                val distributors = getDistributors(context)
-                if (distributors.size == 1) {
-                    saveDistributor(context, distributors.first())
-                    callback(true)
-                } else {
+                ResolvedDistributor.NoneAvailable -> {
                     callback(false)
                 }
             }
@@ -547,11 +594,15 @@ object UnifiedPush {
      * If you register for the first time, it will use the user's default Distributor or the OS will
      * ask what it should use.
      *
+     * **Before calling this function**, you may want to check if [getAckDistributor] exists and
+     * resolve the default distributor with [resolveDefaultDistributor], to check if the OS will
+     * show a screen to the user. In this case, you can introduce this screen with a dialog
+     * "You are about to select your push service"
+     *
      * **External distributors will be favored over embedded distributors.**
      *
-     * Be aware that this function may start a new translucent activity in order to
-     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
-     * directly in your own activity instead.
+     * This function starts a new translucent activity in order to get the result of the
+     * distributor activity.
      *
      * ## Usage
      *
@@ -559,7 +610,7 @@ object UnifiedPush {
      * ```
      * tryUseCurrentOrDefaultDistributor(context) { success ->
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      * }
      * ```
@@ -568,7 +619,7 @@ object UnifiedPush {
      * ```
      * UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success -> {
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      *     return null;
      * });
