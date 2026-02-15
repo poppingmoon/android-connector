@@ -5,12 +5,15 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Space
 import android.widget.TextView
 import org.unifiedpush.android.connector.LinkActivityHelper
+import org.unifiedpush.android.connector.R
 
 /**
  * @hide
@@ -62,9 +65,21 @@ internal class LinkActivity : Activity() {
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
-                1f
+                2f
             )
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            root.addView(
+                ImageView(this).apply {
+                    setImageDrawable(getDrawable(R.drawable.ic_logo))
+                },
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    2f
+                )
+            )
+        }
         root.addView(
             textView,
             LinearLayout.LayoutParams(
@@ -78,7 +93,7 @@ internal class LinkActivity : Activity() {
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
-                2f
+                10f
             )
         )
         setContentView(root)
