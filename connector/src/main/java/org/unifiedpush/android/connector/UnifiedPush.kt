@@ -56,7 +56,7 @@ import kotlin.jvm.Throws
  * import org.unifiedpush.android.connector.UnifiedPush
  * /* ... */
  *
- * UnifiedPush.tryUseCurrentOrDefaultDistributor(context) { success ->
+ * UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext) { success ->
  *     if (success) {
  *         // We have a distributor
  *         // Register your app to the distributor
@@ -77,7 +77,7 @@ import kotlin.jvm.Throws
  * import org.unifiedpush.android.connector.UnifiedPush;
  * /* ... */
  *
- * UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success ->{
+ * UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext, success ->{
  *     if (success) {
  *         // We have a distributor
  *         // Register your app to the distributor
@@ -474,7 +474,7 @@ object UnifiedPush {
      *
      * Kotlin:
      * ```
-     * tryPickDistributor(context) { success ->
+     * tryPickDistributor(activityContext) { success ->
      *     if (success) {
      *         //TODO: register, no need to saveDistributor
      *     }
@@ -483,7 +483,7 @@ object UnifiedPush {
      *
      * Java:
      * ```
-     * UnifiedPush.tryPickDistributor(context, success -> {
+     * UnifiedPush.tryPickDistributor(activityContext, success -> {
      *     if (success) {
      *         //TODO: register, no need to saveDistributor
      *     }
@@ -491,28 +491,37 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
+     * @param [activity] Activity Context
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
     @JvmStatic
     fun tryPickDistributor(
+        activity: Activity,
+        callback: (Boolean) -> Unit,
+    ) {
+        tryPickDistributor(context = activity, callback)
+    }
+
+    /** @hide */
+    @Deprecated(
+        "Use tryPickDistributor(activity, callback) instead",
+        ReplaceWith("tryPickDistributor(activity, callback)")
+    )
+    @JvmStatic
+    fun tryPickDistributor(
         context: Context,
         callback: (Boolean) -> Unit,
     ) {
-        if (context is Activity) {
-            LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
-                LinkActivity.callback = callback
-                val intent =
-                    Intent().apply {
-                        setClassName(context.packageName, LinkActivity::class.java.name)
-                        setAction(LinkActivityHelper.ACTION_PICK)
-                    }
-                context.startActivity(intent)
-            } ?: callback(false)
-        } else {
-            callback(false)
-        }
+        LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
+            LinkActivity.callback = callback
+            val intent =
+                Intent().apply {
+                    setClassName(context.packageName, LinkActivity::class.java.name)
+                    setAction(LinkActivityHelper.ACTION_PICK)
+                }
+            context.startActivity(intent)
+        } ?: callback(false)
     }
 
     /**
@@ -536,7 +545,7 @@ object UnifiedPush {
      *
      * Kotlin:
      * ```
-     * tryUseDefaultDistributor(context) { success ->
+     * tryUseDefaultDistributor(activityContext) { success ->
      *     if (success) {
      *         //TODO: register, no need to saveDistributor
      *     }
@@ -545,7 +554,7 @@ object UnifiedPush {
      *
      * Java:
      * ```
-     * UnifiedPush.tryUseDefaultDistributor(context, success -> {
+     * UnifiedPush.tryUseDefaultDistributor(activityContext, success -> {
      *     if (success) {
      *         //TODO: register, no need to saveDistributor
      *     }
@@ -553,35 +562,42 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
+     * @param [activity] Activity Context
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
     @JvmStatic
     fun tryUseDefaultDistributor(
+        activity: Activity,
+        callback: (Boolean) -> Unit,
+    ) = tryUseDefaultDistributor(context = activity, callback)
+
+    /** @hide */
+    @Deprecated(
+        "Use tryUseDefaultDistributor(activity, callback) instead",
+        ReplaceWith("tryUseDefaultDistributor(activity, callback)")
+    )
+    @JvmStatic
+    fun tryUseDefaultDistributor(
         context: Context,
         callback: (Boolean) -> Unit,
     ) {
-        if (context is Activity) {
-            when (val resolved = resolveDefaultDistributor(context)) {
-                ResolvedDistributor.ToSelect -> {
-                    LinkActivity.callback = callback
-                    val intent =
-                        Intent().apply {
-                            setClassName(context.packageName, LinkActivity::class.java.name)
-                        }
-                    context.startActivity(intent)
-                }
-                is ResolvedDistributor.Found -> {
-                    saveDistributor(context, resolved.packageName)
-                    callback(true)
-                }
-                ResolvedDistributor.NoneAvailable -> {
-                    callback(false)
-                }
+        when (val resolved = resolveDefaultDistributor(context)) {
+            ResolvedDistributor.ToSelect -> {
+                LinkActivity.callback = callback
+                val intent =
+                    Intent().apply {
+                        setClassName(context.packageName, LinkActivity::class.java.name)
+                    }
+                context.startActivity(intent)
             }
-        } else {
-            callback(false)
+            is ResolvedDistributor.Found -> {
+                saveDistributor(context, resolved.packageName)
+                callback(true)
+            }
+            ResolvedDistributor.NoneAvailable -> {
+                callback(false)
+            }
         }
     }
 
@@ -608,7 +624,7 @@ object UnifiedPush {
      *
      * Kotlin:
      * ```
-     * tryUseCurrentOrDefaultDistributor(context) { success ->
+     * tryUseCurrentOrDefaultDistributor(activityContext) { success ->
      *     if (success) {
      *         //TODO: register, no need to saveDistributor
      *     }
@@ -617,7 +633,7 @@ object UnifiedPush {
      *
      * Java:
      * ```
-     * UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success -> {
+     * UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext, success -> {
      *     if (success) {
      *         //TODO: register, no need to saveDistributor
      *     }
@@ -625,10 +641,21 @@ object UnifiedPush {
      * });
      * ```
      *
-     * @param [context] Must be an activity, or it will fail if there is no current distributor and the callback will be called with `false`
+     * @param [activity] Activity Context
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
+    @JvmStatic
+    fun tryUseCurrentOrDefaultDistributor(
+        activity: Activity,
+        callback: (Boolean) -> Unit,
+    ) =  tryUseCurrentOrDefaultDistributor(context = activity, callback)
+
+    /** @hide */
+    @Deprecated(
+        "Use tryUseCurrentOrDefaultDistributor(activity, callback) instead",
+        ReplaceWith("tryUseCurrentOrDefaultDistributor(activity, callback)")
+    )
     @JvmStatic
     fun tryUseCurrentOrDefaultDistributor(
         context: Context,

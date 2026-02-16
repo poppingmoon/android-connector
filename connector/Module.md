@@ -113,7 +113,7 @@ You can use `instance` to bring multiple-registration support to your applicatio
 import org.unifiedpush.android.connector.UnifiedPush
 /* ... */
 
-UnifiedPush.tryUseCurrentOrDefaultDistributor(context) { success ->
+UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext) { success ->
     if (success) {
         // We have a distributor
         // Register your app to the distributor
@@ -134,7 +134,7 @@ import static org.unifiedpush.android.connector.ConstantsKt.INSTANCE_DEFAULT;
 import org.unifiedpush.android.connector.UnifiedPush;
 /* ... */
 
-UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success ->{
+UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext, success ->{
     if (success) {
         // We have a distributor
         // Register your app to the distributor
