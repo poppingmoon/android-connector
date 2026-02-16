@@ -460,6 +460,8 @@ object UnifiedPush {
      *
      * It uses the OS dialog to select the applications
      *
+     * **This function should be called after a user interaction**, e.g. after clicking on a button.
+     *
      * **External distributors will be favored over embedded distributors.**
      *
      * **Doesn't work with Distributors that don't support AND_3 specs**
