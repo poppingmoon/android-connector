@@ -71,7 +71,7 @@ internal class LinkActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             root.addView(
                 ImageView(this).apply {
-                    setImageDrawable(getDrawable(R.drawable.ic_logo))
+                    setImageDrawable(getDrawable(R.drawable.ic_unifiedpush))
                 },
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
