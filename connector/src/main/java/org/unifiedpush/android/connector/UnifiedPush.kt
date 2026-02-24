@@ -447,6 +447,7 @@ object UnifiedPush {
      * }
      * ```
      */
+    @JvmStatic
     fun resolveDefaultDistributor(context: Context): ResolvedDistributor {
         return when (val resolved = LinkActivityHelper.resolveLinkActivityPackageName(context)) {
             null -> ResolvedDistributor.NoneAvailable
