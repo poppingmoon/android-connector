@@ -17,11 +17,17 @@ dependencies {
 }
 ```
 
+### Duplicate class errors
+
+This library depends on `tink` which may be used by another library you depend on.
+In this case, building your app may **fail because of duplicate classes**.
+
+To resolve this conflict, add the code snippet below to your **module gradle file** (after the `plugins` and `android` blocks).
+This snippet will override any version of `com.google.crypto.tink:tink` in your app's dependency graph
+with the provided version of `com.google.crypto.tink:tink-android`.
+
 <br>
 
-> The library depends on `tink` which may be used by another library you depend on. In this case, it is possible the build **failed because of duplicate classes**.
->
-> The conflict must be resolved in **the module gradle file**, after the `plugins` and `android` blocks:
 > <details><summary>Gradle Kotlin DSL</summary>
 >
 > _app/build.gradle.kts_:
