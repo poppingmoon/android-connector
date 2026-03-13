@@ -34,7 +34,7 @@ with the provided version of `com.google.crypto.tink:tink-android`.
 >
 > ```kotlin
 > configurations.configureEach {
->     val tink = "com.google.crypto.tink:tink-android:1.17.0"
+>     val tink = "com.google.crypto.tink:tink-android:1.20.0"
 >     // You can also use the library declaration catalog
 >     // val tink = libs.google.tink
 >     resolutionStrategy {
@@ -54,7 +54,7 @@ with the provided version of `com.google.crypto.tink:tink-android`.
 >
 > ```groovy
 > configurations.configureEach {
->     def tink = "com.google.crypto.tink:tink-android:1.17.0"
+>     def tink = "com.google.crypto.tink:tink-android:1.20.0"
 >     resolutionStrategy {
 >         force(tink)
 >         dependencySubstitution {
