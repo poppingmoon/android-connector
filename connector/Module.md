@@ -33,7 +33,7 @@ with the provided version of `com.google.crypto.tink:tink-android`.
 > _app/build.gradle.kts_:
 >
 > ```kotlin
-> configurations.all {
+> configurations.configureEach {
 >     val tink = "com.google.crypto.tink:tink-android:1.17.0"
 >     // You can also use the library declaration catalog
 >     // val tink = libs.google.tink
@@ -53,7 +53,7 @@ with the provided version of `com.google.crypto.tink:tink-android`.
 > _app/build.gradle_:
 >
 > ```groovy
-> configurations.all {
+> configurations.configureEach {
 >     def tink = "com.google.crypto.tink:tink-android:1.17.0"
 >     resolutionStrategy {
 >         force(tink)
