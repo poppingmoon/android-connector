@@ -232,3 +232,33 @@ with [`getAckDistributor`][org.unifiedpush.android.connector.UnifiedPush.getAckD
 If the previous distributor is uninstalled, you can inform the user and/or fallback to the default
 one again, with [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor].
 
+## Exclude library files from app backup
+
+To keep its state, this library creates a number of files in your app's data directory.
+
+You can exclude these files from your app backup.
+To do that, add the following lines to your `android:fullBackupContent` XML (Android <= 11)
+and your `android:dataExtractionRules` XML (Android >= 12).
+For details, please see <https://developer.android.com/identity/data/autobackup>.
+
+```xml
+<exclude
+    domain="database"
+    path="unifiedpush-connector" />
+<exclude
+    domain="database"
+    path="unifiedpush-connector-journal" />
+<exclude
+    domain="sharedpref"
+    path="unifiedpush.connector.xml" />
+```
+
+Note: This is **optional**. If your app is restored on a new device and:
+
+- These files are **not** in the backup: A new push registration will be created from an empty state.
+- These files are in the backup: The existing push registration can be used.
+  This requires the distributor app to be restored, too.
+  If the distributor is missing on the new device, or is missing its state, then your app needs to create a new push registration.
+
+In both of these cases your app should, once it launches on the new device,
+check the UnifiedPush registration state and (re-)register with the distributor.
