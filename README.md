@@ -3,8 +3,7 @@
 This library enables end user applications to easily integrate UnifiedPush.
 This library communicates with distributor apps and handles things such as registration, unregistration, and receiving push messages.
 
-More formally, this library implements the end user application part of the
-[UnifiedPush Android specification](https://unifiedpush.org/developers/spec/android/) (so you don't have to).
+More formally, this library implements the end user application part of the [UnifiedPush Android specification](https://unifiedpush.org/developers/spec/android/) (so you don't have to).
 
 ## Documentation
 
