@@ -237,8 +237,7 @@ one again, with [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.co
 To keep its state, this library creates a number of files in your app's data directory.
 
 You can exclude these files from your app backup.
-To do that, add the following lines to your `android:fullBackupContent` XML (Android <= 11)
-and your `android:dataExtractionRules` XML (Android >= 12).
+To do that, add the following lines to your `android:fullBackupContent` XML (Android <= 11) and your `android:dataExtractionRules` XML (Android >= 12).
 For details, please see <https://developer.android.com/identity/data/autobackup>.
 
 ```xml
@@ -260,5 +259,4 @@ Note: This is **optional**. If your app is restored on a new device and:
   This requires the distributor app to be restored, too.
   If the distributor is missing on the new device, or is missing its state, then your app needs to create a new push registration.
 
-In both of these cases your app should, once it launches on the new device,
-check the UnifiedPush registration state and (re-)register with the distributor.
+In both of these cases your app should, once it launches on the new device, check the UnifiedPush registration state and (re-)register with the distributor.
