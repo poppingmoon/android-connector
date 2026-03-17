@@ -27,43 +27,36 @@ This snippet will override any version of `com.google.crypto.tink:tink` in your 
 
 <br>
 
-> <details><summary>Gradle Kotlin DSL</summary>
->
-> _app/build.gradle.kts_:
->
-> ```kotlin
-> configurations.configureEach {
->     val tink = "com.google.crypto.tink:tink-android:1.20.0"
->     // You can also use the library declaration catalog
->     // val tink = libs.google.tink
->     resolutionStrategy {
->         force(tink)
->         dependencySubstitution {
->             substitute(module("com.google.crypto.tink:tink")).using(module(tink))
->         }
->     }
-> }
-> ```
->
-> </details>
->
-> <details><summary>Gradle Groovy DSL</summary>
->
-> _app/build.gradle_:
->
-> ```groovy
-> configurations.configureEach {
->     def tink = "com.google.crypto.tink:tink-android:1.20.0"
->     resolutionStrategy {
->         force(tink)
->         dependencySubstitution {
->            substitute module('com.google.crypto.tink:tink') using module(tink)
->         }
->     }
-> }
-> ```
->
-> </details>
+<details><summary>Gradle Kotlin DSL</summary>
+_app/build.gradle.kts_:
+```kotlin
+configurations.configureEach {
+    val tink = "com.google.crypto.tink:tink-android:1.20.0"
+    // You can also use the library declaration catalog
+    // val tink = libs.google.tink
+    resolutionStrategy {
+        force(tink)
+        dependencySubstitution {
+            substitute(module("com.google.crypto.tink:tink")).using(module(tink))
+        }
+    }
+}
+```
+</details>
+<details><summary>Gradle Groovy DSL</summary>
+_app/build.gradle_:
+```groovy
+configurations.configureEach {
+    def tink = "com.google.crypto.tink:tink-android:1.20.0"
+    resolutionStrategy {
+        force(tink)
+        dependencySubstitution {
+           substitute module('com.google.crypto.tink:tink') using module(tink)
+        }
+    }
+}
+```
+</details>
 
 ## Expose a Service to handle incoming events
 
