@@ -17,7 +17,7 @@ This is the library you should start with when integrating UnifiedPush.
 The <a href="./embedded_fcm_distributor">embedded_fcm_distributor</a> library adds a fallback to Google's Firebase Cloud Messaging (FCM).
 This is useful for users who don't have a UnifiedPush distributor app installed, but who have Play Services on their device.
 
-The <a href="./embedded_fcm_distributor">embedded_fcm_distributor</a> acts like an UnifiedPush distributor, but it is internal to your app and passes notifications through FCM.
+It acts like an UnifiedPush distributor, but it is internal to your app and passes notifications through FCM.
 It doesn't contain proprietary code.
 
 ## Example implementation
