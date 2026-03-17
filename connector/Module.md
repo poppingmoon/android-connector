@@ -254,9 +254,7 @@ For details, please see <https://developer.android.com/identity/data/autobackup>
 
 Note: This is **optional**. If your app is restored on a new device and:
 
-- These files are **not** in the backup: A new push registration will be created from an empty state.
-- These files are in the backup: The existing push registration can be used.
-  This requires the distributor app to be restored, too.
-  If the distributor is missing on the new device, or is missing its state, then your app needs to create a new push registration.
+- These files are **not** in the backup: a new push registration will be created from an empty state.
+- These files are in the backup: the state will be resolved during the next `UnifiedPush.register` call.
 
 In both of these cases your app should, once it launches on the new device, check the UnifiedPush registration state and (re-)register with the distributor.
