@@ -25,8 +25,6 @@ In this case, building your app may **fail because of duplicate classes**.
 To resolve this conflict, add the code snippet below to your **module gradle file** (after the `plugins` and `android` blocks).
 This snippet will override any version of `com.google.crypto.tink:tink` in your app's dependency graph with the provided version of `com.google.crypto.tink:tink-android`.
 
-<br>
-
 <details><summary>Gradle Kotlin DSL</summary>
 
 _app/build.gradle.kts_:
@@ -63,6 +61,15 @@ configurations.configureEach {
 ```
 
 </details>
+
+If you want to know what is the other library depending on tink, you can run the following command.
+- Replace `:app` with your gradle project
+- Replace `mainDebugRuntimeClasspath` with one of the resolvable configurations: `./gradlew app:resolvableConfigurations | grep 'RuntimeClasspath'`
+
+```console
+./gradlew :app:dependencyInsight --configuration mainDebugRuntimeClasspath --dependency com.google.crypto.tink:tink
+./gradlew :app:dependencyInsight --configuration mainDebugRuntimeClasspath --dependency com.google.crypto.tink:tink-android
+```
 
 ## Expose a Service to handle incoming events
 
