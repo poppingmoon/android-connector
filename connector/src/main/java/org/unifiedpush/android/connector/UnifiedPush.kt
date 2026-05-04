@@ -450,9 +450,54 @@ object UnifiedPush {
     @JvmStatic
     fun resolveDefaultDistributor(context: Context): ResolvedDistributor {
         return when (val resolved = LinkActivityHelper.resolveLinkActivityPackageName(context)) {
-            null -> ResolvedDistributor.NoneAvailable
+            null -> resolveWithoutLinkActivity(context)
             "android" -> ResolvedDistributor.ToSelect
             is String -> ResolvedDistributor.Found(resolved)
+        }
+    }
+
+    /**
+     * Try to "resolve" embedded or legacy distributor that doesn't support LinkActivity
+     */
+    @JvmStatic
+    private fun resolveWithoutLinkActivity(context: Context): ResolvedDistributor {
+        val distributors = getDistributors(context)
+        val extDistributors = distributors.filter { it != context.packageName }
+        return when (true) {
+            (distributors.isEmpty()) -> {
+                Log.d(TAG, "No distributor available on the system")
+                ResolvedDistributor.NoneAvailable
+            }
+
+            (distributors.size == 1) -> {
+                // If there is a single distributor, we use it:
+                // it is probably the embedded distributor
+                Log.d(
+                    TAG,
+                    "Found a single distributor without LinkActivity: probably an embedded distrib."
+                )
+                ResolvedDistributor.Found(distributors.first())
+            }
+
+            (extDistributors.size == 1) -> {
+                // If there is more than a single distributor,
+                // then there is likely a distributor that does not implement the LinkActivity:
+                // we try to use it anyway.
+                // If there are more than one legacy distributor, we simply fail.
+                Log.d(
+                    TAG,
+                    "Found a single external (legacy) distributor without LinkActivity"
+                )
+                ResolvedDistributor.Found(extDistributors.first())
+            }
+
+            else -> {
+                Log.d(
+                    TAG,
+                    "Found ${extDistributors.size} external (legacy) distributors without LinkActivity, can't select one"
+                )
+                ResolvedDistributor.NoneAvailable
+            }
         }
     }
 
