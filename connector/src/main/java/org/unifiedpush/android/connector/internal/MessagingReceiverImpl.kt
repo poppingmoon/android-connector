@@ -9,6 +9,7 @@ import org.unifiedpush.android.connector.PushService
 import org.unifiedpush.android.connector.UnifiedPush
 import org.unifiedpush.android.connector.data.PushEndpoint
 import org.unifiedpush.android.connector.data.PushMessage
+import java.util.concurrent.Executors
 
 /**
  * @hide
@@ -55,7 +56,14 @@ class MessagingReceiverImpl : MessagingReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (shouldRun(context)) {
-            super.onReceive(context, intent)
+            val pending = goAsync()
+            executor.submit {
+                try {
+                    super.onReceive(context, intent)
+                } finally {
+                    pending.finish()
+                }
+            }
         }
     }
 
@@ -77,5 +85,6 @@ class MessagingReceiverImpl : MessagingReceiver() {
 
     companion object {
         private var shouldRun: Boolean? = null
+        private val executor = Executors.newSingleThreadExecutor()
     }
 }
