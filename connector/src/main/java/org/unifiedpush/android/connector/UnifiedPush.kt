@@ -770,10 +770,12 @@ object UnifiedPush {
                 context.packageName,
                 PackageManager.GET_SERVICES + PackageManager.GET_RECEIVERS,
             )
-        return packageInfo.services?.map { it.name }
-            ?.contains("org.unifiedpush.android.embedded_fcm_distributor.fcm.FirebaseForwardingService") == true ||
-            packageInfo.receivers?.map { it.name }
-                ?.contains("org.unifiedpush.android.foss_embedded_fcm_distributor.fcm.FirebaseReceiver") == true
+        val serviceNames = packageInfo.services?.map { it.name } ?: emptyList()
+        val receiverNames = packageInfo.receivers?.map { it.name } ?: emptyList()
+        return (serviceNames + receiverNames).any { s ->
+            s.startsWith("org.unifiedpush.android.embedded_fcm_distributor.") ||
+                    s.startsWith("org.unifiedpush.android.foss_embedded_fcm_distributor.")
+        }
     }
 
     @JvmStatic
