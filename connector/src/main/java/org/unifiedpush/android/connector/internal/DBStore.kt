@@ -15,6 +15,7 @@ import org.unifiedpush.android.connector.internal.data.Distributor
 import org.unifiedpush.android.connector.internal.data.RegistrationData
 import org.unifiedpush.android.connector.internal.data.WebPushKeysRecord
 import org.unifiedpush.android.connector.keys.KeyManager
+import java.util.concurrent.Executors
 
 internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
 
@@ -881,7 +882,12 @@ internal class DBStore(context: Context) : SQLiteOpenHelper(context, DB_NAME, nu
         fun get(context: Context) = synchronized(this) {
             instance ?: DBStore(context.applicationContext).also { db ->
                 Log.d(TAG, "DBStore version $DB_VERSION")
-                db.migrateFromLegacy(context)
+                val executor = Executors.newSingleThreadExecutor()
+                try {
+                    executor.submit { db.migrateFromLegacy(context) }
+                } finally {
+                    executor.shutdown()
+                }
                 instance = db
             }
         }
