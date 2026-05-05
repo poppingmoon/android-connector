@@ -1,7 +1,6 @@
 steps:
     build:
-        # https://github.com/MobileDevOps/android-sdk-image
-        image: mobiledevops/android-sdk-image:latest
+        image: codeberg.org/s1m/android-sdk-image:latest
         when:
           branch: [main, dev]
           event: [push, pull_request, manual]
