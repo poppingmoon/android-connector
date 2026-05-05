@@ -364,6 +364,18 @@ object UnifiedPush {
     /**
      * Get a list of available distributors installed on the system
      *
+     * ## Embedded distributor
+     *
+     * If your application embeds a distributor, its package name is present in the list.
+     *
+     * If the embedded distributor is the `embedded_fcm_distributor` and the Play Services aren't
+     * installed on the device, your application's package name is filter out.
+     * **You can use it to know if the Play Services are installed**:
+     * `getDistributors(ctx).contains(ctx.packageName)`
+     *
+     * To get the list of external distributors, you need to filter out your package name:
+     * `getDistributors(ctx).filter { it != ctx.packageName }`
+     *
      * @return The list of distributor's package name
      */
     @JvmStatic
