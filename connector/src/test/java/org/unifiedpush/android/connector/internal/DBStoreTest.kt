@@ -51,6 +51,9 @@ class DBStoreTest {
     fun replacePrimaryDistrib() {
         assertNoDistrib()
         setD1()
+        val tokenWithD1 = getRegistrationToken(DISTRIB_1)
+        assert(tokenWithD1 != null) { "No token found for $DISTRIB_1" }
+        assertInstance(tokenWithD1!!, DISTRIB_1, REGISTRATION_INSTANCE)
         // Replace the distributor, it removes DISTRIB_1 coTokens
         assertContainsOnlyCoTokenFor(
             listOf(DISTRIB_1),
@@ -59,6 +62,8 @@ class DBStoreTest {
                 it.second
             }
         )
+        // The previous token shouldn't be accepted anymore after changing primary distrib
+        assertNoInstance(tokenWithD1)
         assertPrimary(DISTRIB_2)
         assertDistrib(DISTRIB_2, false)
         // We can try to remove the old one, nothing changes
@@ -327,6 +332,10 @@ class DBStoreTest {
         )
     }
 
+    private fun getRegistrationToken(distrib: String): String? {
+        return db.registrations.getToken(REGISTRATION_INSTANCE, distrib)
+    }
+
     /**
      * Initial: D1 (ack: false)
      */
@@ -337,7 +346,7 @@ class DBStoreTest {
         assertDistrib(DISTRIB_1, false)
         assertKnowOnlyDistribs(listOf(DISTRIB_1))
         addRegistration()
-        assert(db.registrations.getToken(REGISTRATION_INSTANCE, DISTRIB_1) != null)
+        assert(getRegistrationToken(DISTRIB_1) != null)
     }
 
     /**
@@ -360,7 +369,7 @@ class DBStoreTest {
         // We need to call addRegistration again, because after setFallback, we
         // call UnifiedPush.register for all instances
         addRegistration()
-        assert(db.registrations.getToken(REGISTRATION_INSTANCE, DISTRIB_2) != null)
+        assert(getRegistrationToken(DISTRIB_2) != null)
     }
 
     /**
@@ -380,7 +389,7 @@ class DBStoreTest {
         // We need to call addRegistration again, because after setFallback, we
         // call UnifiedPush.register for all instances
         addRegistration()
-        assert(db.registrations.getToken(REGISTRATION_INSTANCE, DISTRIB_3) != null)
+        assert(getRegistrationToken(DISTRIB_3) != null)
     }
 
     private fun assertPrimary(distrib: String) {
@@ -435,6 +444,28 @@ class DBStoreTest {
         unknownList.forEach { d ->
             assert(!coTokens.map { it.distributor }.contains(d)) { "$d in $coTokens" }
         }
+    }
+
+    /**
+     * Assert an instance is linked to the connection token, for the [distributor] and the [instance]
+     *
+     * This is what is used when we receive a push event from the distributor
+     */
+    private fun assertInstance(connectionToken: String, distributor: String, instance: String) {
+        val fInstance = db.registrations.getInstance(connectionToken)
+        assert(fInstance != null) { "No instance found for $distributor, instance=$fInstance" }
+        assertEquals(distributor, fInstance!!.distributor)
+        assertEquals(instance, fInstance.instance)
+    }
+
+    /**
+     * Assert no instance is linked to the connection token
+     *
+     * This is what is used when we receive a push event from the distributor
+     */
+    private fun assertNoInstance(connectionToken: String) {
+        val instance = db.registrations.getInstance(connectionToken)
+        assert(instance == null) { "Unexpected instance found for $connectionToken, should be null" }
     }
 
     @After
