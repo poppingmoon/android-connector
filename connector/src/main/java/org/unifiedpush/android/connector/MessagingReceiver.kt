@@ -117,7 +117,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        val token = intent.getStringExtra(EXTRA_TOKEN)
+        val token = intent.getNullableStringExtra(EXTRA_TOKEN)
         val store = DBStore.get(context)
         val keyManager = getKeyManager(context)
         val co = token?.let {
@@ -126,8 +126,8 @@ abstract class MessagingReceiver : BroadcastReceiver() {
         val wakeLock = WakeLock(context)
         when (intent.action) {
             ACTION_NEW_ENDPOINT -> {
-                val endpoint = intent.getStringExtra(EXTRA_ENDPOINT) ?: return
-                val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
+                val endpoint = intent.getNullableStringExtra(EXTRA_ENDPOINT) ?: return
+                val id = intent.getNullableStringExtra(EXTRA_MESSAGE_ID)
                 val pubKeys = keyManager.getPublicKeySet(co.instance)
                 store.distributor.ack(co.distributor)
                     .forEach {
@@ -144,12 +144,12 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                 mayAcknowledgeMessage(context, co.distributor, id, token)
             }
             ACTION_REGISTRATION_FAILED -> {
-                val reason = intent.getStringExtra(EXTRA_REASON).toFailedReason()
+                val reason = intent.getNullableStringExtra(EXTRA_REASON).toFailedReason()
                 Log.i(TAG, "Failed: $reason")
                 onRegistrationFailed(context, reason, co.instance)
             }
             ACTION_TEMP_UNAVAILABLE -> {
-                intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
+                intent.getNullableStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
                     try {
                         val (new, toDel) = store.distributor.setFallback(co.distributor, distrib)
                         toDel.forEach { co ->
@@ -179,7 +179,7 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                 }
             }
             ACTION_UNREGISTERED -> {
-                intent.getStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
+                intent.getNullableStringExtra(EXTRA_NEW_DISTRIBUTOR)?.let { distrib ->
                     val (new, toDel) = store.distributor.setPrimary(distrib)
                     toDel.forEach { co ->
                         // Broadcast UNREGISTER to potentially removed fallbacks
@@ -207,8 +207,8 @@ abstract class MessagingReceiver : BroadcastReceiver() {
                 }
             }
             ACTION_MESSAGE -> {
-                val message = intent.getByteArrayExtra(EXTRA_BYTES_MESSAGE) ?: return
-                val id = intent.getStringExtra(EXTRA_MESSAGE_ID)
+                val message = intent.getNullableByteArrayExtra(EXTRA_BYTES_MESSAGE) ?: return
+                val id = intent.getNullableStringExtra(EXTRA_MESSAGE_ID)
                 val pushMessage =
                     try {
                         keyManager.decrypt(co.instance, message)?.let {
@@ -242,4 +242,10 @@ abstract class MessagingReceiver : BroadcastReceiver() {
             context.sendBroadcast(broadcastIntent)
         }
     }
+
+    private fun Intent.getNullableStringExtra(name: String): String? =
+        runCatching { this.getStringExtra(name) }.getOrNull()
+
+    private fun Intent.getNullableByteArrayExtra(name: String): ByteArray? =
+        runCatching { this.getByteArrayExtra(name) }.getOrNull()
 }
