@@ -744,7 +744,10 @@ object UnifiedPush {
         // There is no reason saveDistributor is called with an
         // uninstalled distributor, and if in any case it is,
         // get*Distributor checks if it is installed.
-        store.distributor.setPrimary(distributor)
+        val (_, toDel) = store.distributor.setPrimary(distributor)
+        toDel.forEach {
+            broadcastUnregister(context, it)
+        }
     }
 
     /**
