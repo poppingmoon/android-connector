@@ -60,7 +60,7 @@ dependencies {
     }
     // We use a local version of apps-webpush until they fix the decryption:
     // https://github.com/tink-crypto/tink-java-apps/pull/5
-    implementation 'com.google.crypto.tink:tink:1.21.0' // Remove once merged
+    implementation 'com.google.crypto.tink:tink:1.23.0' // Remove once merged
     // implementation "com.google.crypto.tink:apps-webpush:1.11.0" // Uncomment once merged
     compileOnly 'androidx.annotation:annotation-jvm:1.10.0'
     testImplementation("junit:junit:4.13.2")
