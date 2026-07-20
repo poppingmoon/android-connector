@@ -10,6 +10,7 @@ import android.content.pm.ResolveInfo
 import android.os.Build
 import android.util.AndroidException
 import android.util.Log
+import org.unifiedpush.android.connector.data.ResolvedDistributor
 import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
 import org.unifiedpush.android.connector.internal.data.Connection
@@ -30,8 +31,16 @@ import kotlin.jvm.Throws
  * When you set UnifiedPush for the first time on your application, you will want to use the default user's
  * distributor.
  *
- * Therefore, you can use [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
- * to select the saved distributor or the default one when the user enables UnifiedPush.
+ * Therefore, you can first use [`resolveDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.resolveDefaultDistributor] to check if a default
+ * distributor is defined, or if the user will have to select one.
+ *
+ * If it resolves to [`ResolvedDistributor.ToSelect`][org.unifiedpush.android.connector.data.ResolvedDistributor.ToSelect],
+ * the user will see an OS screen to select their distributor. We recommend introducing this OS screen
+ * with a dialog, e.g. "You are about to select your push service".
+ *
+ * To select the default distributor, you can use [`tryUseDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
+ * or [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor] if you want
+ * to share code for the re-registrations too. These function save the distributor to use.
  *
  * When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
  * It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
@@ -47,7 +56,7 @@ import kotlin.jvm.Throws
  * import org.unifiedpush.android.connector.UnifiedPush
  * /* ... */
  *
- * UnifiedPush.tryUseCurrentOrDefaultDistributor(context) { success ->
+ * UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext) { success ->
  *     if (success) {
  *         // We have a distributor
  *         // Register your app to the distributor
@@ -68,7 +77,7 @@ import kotlin.jvm.Throws
  * import org.unifiedpush.android.connector.UnifiedPush;
  * /* ... */
  *
- * UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success ->{
+ * UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext, success ->{
  *     if (success) {
  *         // We have a distributor
  *         // Register your app to the distributor
@@ -85,10 +94,6 @@ import kotlin.jvm.Throws
  * <!-- END JAVA -->
  * </div>
  * </div>
- *
- * Be aware that [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
- * starts a new translucent activity in order to get the result of the distributor activity. You may prefer to use
- * [`LinkActivityHelper`][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
  *
  * ### Use another distributor
  *
@@ -359,6 +364,18 @@ object UnifiedPush {
     /**
      * Get a list of available distributors installed on the system
      *
+     * ## Embedded distributor
+     *
+     * If your application embeds a distributor, its package name is present in the list.
+     *
+     * If the embedded distributor is the `embedded_fcm_distributor` and the Play Services aren't
+     * installed on the device, your application's package name is filter out.
+     * **You can use it to know if the Play Services are installed**:
+     * `getDistributors(ctx).contains(ctx.packageName)`
+     *
+     * To get the list of external distributors, you need to filter out your package name:
+     * `getDistributors(ctx).filter { it != ctx.packageName }`
+     *
      * @return The list of distributor's package name
      */
     @JvmStatic
@@ -412,61 +429,159 @@ object UnifiedPush {
     }
 
     /**
+     * Resolve default distributor using the deeplink "unifiedpush://link"
+     *
+     * When the user has a default or a single distributor, it returns [ResolvedDistributor.Found],
+     * and [tryUseDefaultDistributor] is transparent to the user.
+     *
+     * When the user has many distributors but hasn't selected a default yet, it returns
+     * [ResolvedDistributor.ToSelect], and [tryUseDefaultDistributor] will open an OS screen to select one.
+     *
+     * Informing the user about the incoming OS screen helps them to understand why they are selecting
+     * an application. The OS dialog can't have a custom title or message, and we need the OS dialog
+     * to define a default distributor.
+     *
+     * ```
+     * when (val res = UnifiedPush.resolveDefaultDistributor(this)) {
+     *     is ResolvedDistributor.Found -> {
+     *         // The user don't have to interact. Will be the case most of the time,
+     *         // if the user has a default or a single distributor installed
+     *         UnifiedPush.saveDistributor(this, res.packageName)
+     *         UnifiedPush.register(this)
+     *     }
+     *     ResolvedDistributor.ToSelect -> {
+     *         // Use your own dialog before running tryUseDefaultDistributor
+     *         showDialogBeforeSelection(this)
+     *     }
+     *     ResolvedDistributor.NoneAvailable -> {
+     *         // fallback to another solution
+     *     }
+     * }
+     * ```
+     */
+    @JvmStatic
+    fun resolveDefaultDistributor(context: Context): ResolvedDistributor {
+        return when (val resolved = LinkActivityHelper.resolveLinkActivityPackageName(context)) {
+            null -> resolveWithoutLinkActivity(context)
+            "android" -> ResolvedDistributor.ToSelect
+            is String -> ResolvedDistributor.Found(resolved)
+        }
+    }
+
+    /**
+     * Try to "resolve" embedded or legacy distributor that doesn't support LinkActivity
+     */
+    @JvmStatic
+    private fun resolveWithoutLinkActivity(context: Context): ResolvedDistributor {
+        val distributors = getDistributors(context)
+        val extDistributors = distributors.filter { it != context.packageName }
+        return when (true) {
+            (distributors.isEmpty()) -> {
+                Log.d(TAG, "No distributor available on the system")
+                ResolvedDistributor.NoneAvailable
+            }
+
+            (distributors.size == 1) -> {
+                // If there is a single distributor, we use it:
+                // it is probably the embedded distributor
+                Log.d(
+                    TAG,
+                    "Found a single distributor without LinkActivity: probably an embedded distrib."
+                )
+                ResolvedDistributor.Found(distributors.first())
+            }
+
+            (extDistributors.size == 1) -> {
+                // If there is more than a single distributor,
+                // then there is likely a distributor that does not implement the LinkActivity:
+                // we try to use it anyway.
+                // If there are more than one legacy distributor, we simply fail.
+                Log.d(
+                    TAG,
+                    "Found a single external (legacy) distributor without LinkActivity"
+                )
+                ResolvedDistributor.Found(extDistributors.first())
+            }
+
+            else -> {
+                Log.d(
+                    TAG,
+                    "Found ${extDistributors.size} external (legacy) distributors without LinkActivity, can't select one"
+                )
+                ResolvedDistributor.NoneAvailable
+            }
+        }
+    }
+
+    /**
      * Try to pick a distributor opening the deeplink "unifiedpush://link", ignoring the default one
      *
      * It uses the OS dialog to select the applications
+     *
+     * **This function should be called after a user interaction**, e.g. after clicking on a button.
      *
      * **External distributors will be favored over embedded distributors.**
      *
      * **Doesn't work with Distributors that don't support AND_3 specs**
      *
-     * Be aware that this function starts a new translucent activity in order to
-     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
-     * directly in your own activity instead.
+     * This function starts a new translucent activity in order to get the result of the
+     * distributor activity.
+     *
+     * You may prefer to override `onActivityResult` of your own Activity and use
+     * [LinkActivityHelper.startPickLinkActivityForResult] instead.
      *
      * ## Usage
      *
      * Kotlin:
      * ```
-     * tryPickDistributor(context) { success ->
+     * tryPickDistributor(activityContext) { success ->
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      * }
      * ```
      *
      * Java:
      * ```
-     * UnifiedPush.tryPickDistributor(context, success -> {
+     * UnifiedPush.tryPickDistributor(activityContext, success -> {
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      *     return null;
      * });
      * ```
      *
-     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
+     * @param [activity] Activity Context
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
     @JvmStatic
     fun tryPickDistributor(
+        activity: Activity,
+        callback: (Boolean) -> Unit,
+    ) {
+        tryPickDistributor(context = activity, callback)
+    }
+
+    /** @hide */
+    @Deprecated(
+        "Use tryPickDistributor(activity, callback) instead",
+        ReplaceWith("tryPickDistributor(activity, callback)")
+    )
+    @JvmStatic
+    fun tryPickDistributor(
         context: Context,
         callback: (Boolean) -> Unit,
     ) {
-        if (context is Activity) {
-            LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
-                LinkActivity.callback = callback
-                val intent =
-                    Intent().apply {
-                        setClassName(context.packageName, LinkActivity::class.java.name)
-                        setAction(LinkActivityHelper.ACTION_PICK)
-                    }
-                context.startActivity(intent)
-            } ?: callback(false)
-        } else {
-            callback(false)
-        }
+        LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
+            LinkActivity.callback = callback
+            val intent =
+                Intent().apply {
+                    setClassName(context.packageName, LinkActivity::class.java.name)
+                    setAction(LinkActivityHelper.ACTION_PICK)
+                }
+            context.startActivity(intent)
+        } ?: callback(false)
     }
 
     /**
@@ -474,67 +589,75 @@ object UnifiedPush {
      *
      * It allows users to define a default distributor for all their applications
      *
+     * **Before calling this function**, you may want to resolve the default distributor with
+     * [resolveDefaultDistributor], to check if the OS will show a screen to the user. In this case,
+     * you can introduce this screen with a dialog "You are about to select your push service"
+     *
      * **External distributors will be favored over embedded distributors.**
      *
-     * Be aware that this function starts a new translucent activity in order to
-     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
-     * directly in your own activity instead.
+     * This function starts a new translucent activity in order to get the result of the
+     * distributor activity.
+     *
+     * You may prefer to override `onActivityResult` of your own Activity and use
+     * [LinkActivityHelper.startLinkActivityForResult] instead.
      *
      * ## Usage
      *
      * Kotlin:
      * ```
-     * tryUseDefaultDistributor(context) { success ->
+     * tryUseDefaultDistributor(activityContext) { success ->
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      * }
      * ```
      *
      * Java:
      * ```
-     * UnifiedPush.tryUseDefaultDistributor(context, success -> {
+     * UnifiedPush.tryUseDefaultDistributor(activityContext, success -> {
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      *     return null;
      * });
      * ```
      *
-     * @param [context] Must be an activity, or it will fail and the callback will be called with `false`
+     * @param [activity] Activity Context
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
     @JvmStatic
     fun tryUseDefaultDistributor(
+        activity: Activity,
+        callback: (Boolean) -> Unit,
+    ) = tryUseDefaultDistributor(context = activity, callback)
+
+    /** @hide */
+    @Deprecated(
+        "Use tryUseDefaultDistributor(activity, callback) instead",
+        ReplaceWith("tryUseDefaultDistributor(activity, callback)")
+    )
+    @JvmStatic
+    fun tryUseDefaultDistributor(
         context: Context,
         callback: (Boolean) -> Unit,
     ) {
-        if (context is Activity) {
-            LinkActivityHelper.resolveLinkActivityPackageName(context)?.let {
-                if (it == "android") {
-                    LinkActivity.callback = callback
-                    val intent =
-                        Intent().apply {
-                            setClassName(context.packageName, LinkActivity::class.java.name)
-                        }
-                    context.startActivity(intent)
-                } else {
-                    saveDistributor(context, it)
-                    callback(true)
-                }
-            } ?: run {
-                // Fallback to AND_2, if there is only one distributor, we use it.
-                val distributors = getDistributors(context)
-                if (distributors.size == 1) {
-                    saveDistributor(context, distributors.first())
-                    callback(true)
-                } else {
-                    callback(false)
-                }
+        when (val resolved = resolveDefaultDistributor(context)) {
+            ResolvedDistributor.ToSelect -> {
+                LinkActivity.callback = callback
+                val intent =
+                    Intent().apply {
+                        setClassName(context.packageName, LinkActivity::class.java.name)
+                    }
+                context.startActivity(intent)
             }
-        } else {
-            callback(false)
+            is ResolvedDistributor.Found -> {
+                saveDistributor(context, resolved.packageName)
+                callback(true)
+            }
+            ResolvedDistributor.NoneAvailable -> {
+                callback(false)
+            }
         }
     }
 
@@ -547,37 +670,52 @@ object UnifiedPush {
      * If you register for the first time, it will use the user's default Distributor or the OS will
      * ask what it should use.
      *
+     * **Before calling this function**, you may want to check if [getAckDistributor] exists and
+     * resolve the default distributor with [resolveDefaultDistributor], to check if the OS will
+     * show a screen to the user. In this case, you can introduce this screen with a dialog
+     * "You are about to select your push service"
+     *
      * **External distributors will be favored over embedded distributors.**
      *
-     * Be aware that this function may start a new translucent activity in order to
-     * get the result of the distributor activity. You may prefer to use [LinkActivityHelper]
-     * directly in your own activity instead.
+     * This function starts a new translucent activity in order to get the result of the
+     * distributor activity.
      *
      * ## Usage
      *
      * Kotlin:
      * ```
-     * tryUseCurrentOrDefaultDistributor(context) { success ->
+     * tryUseCurrentOrDefaultDistributor(activityContext) { success ->
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      * }
      * ```
      *
      * Java:
      * ```
-     * UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success -> {
+     * UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext, success -> {
      *     if (success) {
-     *         //TODO: register
+     *         //TODO: register, no need to saveDistributor
      *     }
      *     return null;
      * });
      * ```
      *
-     * @param [context] Must be an activity, or it will fail if there is no current distributor and the callback will be called with `false`
+     * @param [activity] Activity Context
      * @param [callback] is a function taking a Boolean as parameter. This boolean is
      * true if the registration using the deeplink succeeded.
      */
+    @JvmStatic
+    fun tryUseCurrentOrDefaultDistributor(
+        activity: Activity,
+        callback: (Boolean) -> Unit,
+    ) =  tryUseCurrentOrDefaultDistributor(context = activity, callback)
+
+    /** @hide */
+    @Deprecated(
+        "Use tryUseCurrentOrDefaultDistributor(activity, callback) instead",
+        ReplaceWith("tryUseCurrentOrDefaultDistributor(activity, callback)")
+    )
     @JvmStatic
     fun tryUseCurrentOrDefaultDistributor(
         context: Context,
@@ -606,7 +744,10 @@ object UnifiedPush {
         // There is no reason saveDistributor is called with an
         // uninstalled distributor, and if in any case it is,
         // get*Distributor checks if it is installed.
-        store.distributor.setPrimary(distributor)
+        val (_, toDel) = store.distributor.setPrimary(distributor)
+        toDel.forEach {
+            broadcastUnregister(context, it)
+        }
     }
 
     /**
@@ -689,10 +830,12 @@ object UnifiedPush {
                 context.packageName,
                 PackageManager.GET_SERVICES + PackageManager.GET_RECEIVERS,
             )
-        return packageInfo.services?.map { it.name }
-            ?.contains("org.unifiedpush.android.embedded_fcm_distributor.fcm.FirebaseForwardingService") == true ||
-            packageInfo.receivers?.map { it.name }
-                ?.contains("org.unifiedpush.android.foss_embedded_fcm_distributor.fcm.FirebaseReceiver") == true
+        val serviceNames = packageInfo.services?.map { it.name } ?: emptyList()
+        val receiverNames = packageInfo.receivers?.map { it.name } ?: emptyList()
+        return (serviceNames + receiverNames).any { s ->
+            s.startsWith("org.unifiedpush.android.embedded_fcm_distributor.") ||
+                    s.startsWith("org.unifiedpush.android.foss_embedded_fcm_distributor.")
+        }
     }
 
     @JvmStatic

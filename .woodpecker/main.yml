@@ -1,7 +1,6 @@
 steps:
-    check:
-        # https://github.com/MobileDevOps/android-sdk-image
-        image: mobiledevops/android-sdk-image:latest
+    build:
+        image: codeberg.org/s1m/android-sdk-image:latest
         when:
           branch: [main, dev]
           event: [push, pull_request, manual]
@@ -9,7 +8,7 @@ steps:
           - ln -s . android-connector
           - git clone https://codeberg.org/UnifiedPush/android-example example
           - cd ./example/
-          - sed -i -e 's-//toDevMain//--' settings.gradle
+          - sed -i -e 's-//toDevMain//--' settings.gradle.kts
           - ./gradlew assembleMainFlavor --stacktrace
           - mv app/build/outputs/apk/mainFlavor/debug/app-mainFlavor-debug.apk ../UP-Example-main.apk
 

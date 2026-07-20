@@ -1,34 +1,33 @@
 # UnifiedPush android-connector
 
-This is a library that can be used by an end user application to receive notifications from any unified push provider.
-An [example application](https://codeberg.org/UnifiedPush/android-example) is available to show basic usage of the library.
+This library enables end user applications to easily integrate UnifiedPush.
+This library communicates with distributor apps and handles things such as registration, unregistration, and receiving push messages.
 
-# Documentation
+More formally, this library implements the end user application part of the [UnifiedPush Android specification](https://unifiedpush.org/developers/spec/android/) (so you don't have to).
 
-General documentation is available at <https://unifiedpush.org>
+## Documentation
 
-## Generate documentation
+- The [example application](https://codeberg.org/UnifiedPush/android-example) shows the basic usage of this library.
+- The library documentation is available at <https://unifiedpush.org/kdoc/>.
+- General documentation is available at <https://unifiedpush.org>.
+
+## Building the documentation
 
 Documentation for this library can be generated with [Dokka](https://kotlinlang.org/docs/dokka-introduction.html):
 
 ```console
-$ ./gradlew dokkaHtml
+./gradlew dokkaHtmlMultiModule
 ```
 
-## Generate documentation for all UnifiedPush modules:
+The result is available in the `kdoc/` directory.
 
-The steps for all UnifiedPush modules are included in [scripts/doc.sh]. It does the following:
-
-1. Clone the repositories you wish to generate documentation
-2. Checkout the version of the different repositories
-3. Add the modules to the project settings
-4. Run `dokkaHtmlMultiModule`
+The [scripts/doc.sh](scripts/doc.sh) automates building the documentation for all UnifiedPush libraries.
 
 ```console
-$ ./gradlew dokkaHtmlMultiModule
+./scripts/doc.sh
 ```
 
-# Funding
+## Funding
 
 This project is funded through [NGI Zero Core](https://nlnet.nl/core), a fund established by [NLnet](https://nlnet.nl) with financial support from the European Commission's [Next Generation Internet](https://ngi.eu) program. Learn more at the [NLnet project page](https://nlnet.nl/project/UnifiedPush).
 

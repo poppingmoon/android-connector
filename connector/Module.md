@@ -17,48 +17,59 @@ dependencies {
 }
 ```
 
-<br>
+### Duplicate class errors
 
-> The library depends on `tink` which may be used by another library you depend on. In this case, it is possible the build **failed because of duplicate classes**.
->
-> The conflict must be resolved in **the module gradle file**, after the `plugins` and `android` blocks:
-> <details><summary>Gradle Kotlin DSL</summary>
->
-> _app/build.gradle.kts_:
->
-> ```kotlin
-> configurations.all {
->     val tink = "com.google.crypto.tink:tink-android:1.17.0"
->     // You can also use the library declaration catalog
->     // val tink = libs.google.tink
->     resolutionStrategy {
->         force(tink)
->         dependencySubstitution {
->             substitute(module("com.google.crypto.tink:tink")).using(module(tink))
->         }
->     }
-> }
-> ```
->
-> </details>
->
-> <details><summary>Gradle Groovy DSL</summary>
->
-> _app/build.gradle_:
->
-> ```groovy
-> configurations.all {
->     def tink = "com.google.crypto.tink:tink-android:1.17.0"
->     resolutionStrategy {
->         force(tink)
->         dependencySubstitution {
->            substitute module('com.google.crypto.tink:tink') using module(tink)
->         }
->     }
-> }
-> ```
->
-> </details>
+This library depends on `tink` which may be used by another library you depend on.
+In this case, building your app may **fail because of duplicate classes**.
+
+To resolve this conflict, add the code snippet below to your **module gradle file** (after the `plugins` and `android` blocks).
+This snippet will override any version of `com.google.crypto.tink:tink` in your app's dependency graph with the provided version of `com.google.crypto.tink:tink-android`.
+
+<details><summary>Gradle Kotlin DSL</summary>
+
+_app/build.gradle.kts_:
+
+```kotlin
+configurations.configureEach {
+    val tink = "com.google.crypto.tink:tink-android:1.21.0"
+    // You can also use the library declaration catalog
+    // val tink = libs.google.tink
+    resolutionStrategy {
+        force(tink)
+        dependencySubstitution {
+            substitute(module("com.google.crypto.tink:tink")).using(module(tink))
+        }
+    }
+}
+```
+
+</details>
+<details><summary>Gradle Groovy DSL</summary>
+
+_app/build.gradle_:
+
+```groovy
+configurations.configureEach {
+    def tink = "com.google.crypto.tink:tink-android:1.21.0"
+    resolutionStrategy {
+        force(tink)
+        dependencySubstitution {
+           substitute module('com.google.crypto.tink:tink') using module(tink)
+        }
+    }
+}
+```
+
+</details>
+
+If you want to know what is the other library depending on tink, you can run the following command.
+- Replace `:app` with your gradle project
+- Replace `mainDebugRuntimeClasspath` with one of the resolvable configurations: `./gradlew app:resolvableConfigurations | grep 'RuntimeClasspath'`
+
+```console
+./gradlew :app:dependencyInsight --configuration mainDebugRuntimeClasspath --dependency com.google.crypto.tink:tink
+./gradlew :app:dependencyInsight --configuration mainDebugRuntimeClasspath --dependency com.google.crypto.tink:tink-android
+```
 
 ## Expose a Service to handle incoming events
 
@@ -88,8 +99,16 @@ have to be able to process a deeplink.
 When you set UnifiedPush for the first time on your application, you will want to use the default user's
 distributor.
 
-Therefore, you can use [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor]
-to select the saved distributor or the default one when the user enables UnifiedPush.
+Therefore, you can first use [`resolveDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.resolveDefaultDistributor] to check if a default
+distributor is defined, or if the user will have to select one.
+
+If it resolves to [`ResolvedDistributor.ToSelect`][org.unifiedpush.android.connector.data.ResolvedDistributor.ToSelect],
+the user will see an OS screen to select their distributor. We recommend introducing this OS screen
+with a dialog, e.g. "You are about to select your push service".
+
+To select the default distributor, you can use [`tryUseDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
+or [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor] if you want
+to share code for the re-registrations too. These function save the distributor to use.
 
 When the distributor is saved, you can call [`register`][org.unifiedpush.android.connector.UnifiedPush.register] to request a new registration.
 It has optional parameters, the following example uses `messageForDistributor` and `vapid`.
@@ -105,7 +124,7 @@ You can use `instance` to bring multiple-registration support to your applicatio
 import org.unifiedpush.android.connector.UnifiedPush
 /* ... */
 
-UnifiedPush.tryUseCurrentOrDefaultDistributor(context) { success ->
+UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext) { success ->
     if (success) {
         // We have a distributor
         // Register your app to the distributor
@@ -126,7 +145,7 @@ import static org.unifiedpush.android.connector.ConstantsKt.INSTANCE_DEFAULT;
 import org.unifiedpush.android.connector.UnifiedPush;
 /* ... */
 
-UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success ->{
+UnifiedPush.tryUseCurrentOrDefaultDistributor(activityContext, success ->{
     if (success) {
         // We have a distributor
         // Register your app to the distributor
@@ -143,10 +162,6 @@ UnifiedPush.tryUseCurrentOrDefaultDistributor(context, success ->{
 <!-- END JAVA -->
 </div>
 </div>
-
-Be aware that [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseDefaultDistributor]
-starts a new translucent activity in order to get the result of the distributor activity. You may prefer to use
-[`LinkActivityHelper`][org.unifiedpush.android.connector.LinkActivityHelper] directly in your own activity instead.
 
 ### Use another distributor
 
@@ -215,7 +230,7 @@ UnifiedPush.register(
 
 ### Unsubscribe
 
-To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribed to if you used one during registration.
+To unsubscribe, simply call [`unregister`][org.unifiedpush.android.connector.UnifiedPush.unregister]. Set the instance you want to unsubscribe to if you used one during registration.
 
 It removes the distributor if this is the last instance to unregister.
 
@@ -229,3 +244,30 @@ with [`getAckDistributor`][org.unifiedpush.android.connector.UnifiedPush.getAckD
 
 If the previous distributor is uninstalled, you can inform the user and/or fallback to the default
 one again, with [`tryUseCurrentOrDefaultDistributor`][org.unifiedpush.android.connector.UnifiedPush.tryUseCurrentOrDefaultDistributor].
+
+## Exclude library files from app backup
+
+To keep its state, this library creates a number of files in your app's data directory.
+
+You can exclude these files from your app backup.
+To do that, add the following lines to your `android:fullBackupContent` XML (Android <= 11) and your `android:dataExtractionRules` XML (Android >= 12).
+For details, please see <https://developer.android.com/identity/data/autobackup>.
+
+```xml
+<exclude
+    domain="database"
+    path="unifiedpush-connector" />
+<exclude
+    domain="database"
+    path="unifiedpush-connector-journal" />
+<exclude
+    domain="sharedpref"
+    path="unifiedpush.connector.xml" />
+```
+
+Note: This is **optional**. If your app is restored on a new device and:
+
+- These files are **not** in the backup: a new push registration will be created from an empty state.
+- These files are in the backup: the state will be resolved during the next `UnifiedPush.register` call.
+
+In both of these cases your app should, once it launches on the new device, check the UnifiedPush registration state and (re-)register with the distributor.
