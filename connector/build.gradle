@@ -3,7 +3,6 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     id 'com.android.library'
-    id 'kotlin-android'
     id 'maven-publish'
 }
 
@@ -31,6 +30,10 @@ android {
 
     defaultConfig {
         minSdk = 16
+
+        aarMetadata {
+            minCompileSdk = minSdk
+        }
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
@@ -70,7 +73,7 @@ dependencies {
 
 def releaseGroupId = 'org.unifiedpush.android'
 def releaseArtifactId = 'connector'
-def releaseVersion = '3.3.4-rc1'
+def releaseVersion = '3.3.5'
 
 tasks.register('printArtifactId') {
     group 'Artifact Info'
