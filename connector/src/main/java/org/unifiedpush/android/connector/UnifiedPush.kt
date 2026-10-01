@@ -10,6 +10,7 @@ import android.content.pm.ResolveInfo
 import android.os.Build
 import android.util.AndroidException
 import android.util.Log
+import org.unifiedpush.android.connector.data.PublicKeySet
 import org.unifiedpush.android.connector.data.ResolvedDistributor
 import org.unifiedpush.android.connector.internal.DBStore
 import org.unifiedpush.android.connector.internal.LinkActivity
@@ -848,6 +849,20 @@ object UnifiedPush {
             Log.v(TAG, "Google services not found: ${e.message}")
         }
         return false
+    }
+
+    /**
+     * Get [PublicKeySet] for [instance]. Encoded to be shared to the application server.
+     *
+     * @return [PublicKeySet] if possible, `null` if the key set doesn't exist or isn't valid.
+     */
+    @JvmStatic
+    fun getPublicKeySet(
+        context: Context,
+        instance: String
+    ): PublicKeySet? {
+        val keyManager = DefaultKeyManager(context)
+        return keyManager.getPublicKeySet(instance)
     }
 
     /**
